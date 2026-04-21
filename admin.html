@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Área Administrativa | Banco de Talentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="admin">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand brand-only-logo" href="index.html" aria-label="Banco de Talentos Conduzir"><img class="brand-logo-img" src="assets/conduzir-logo.png" alt="Logo Conduzir" /></a>
+      <nav class="main-nav"><a href="index.html">Início</a><a href="empresa.html">Empresa</a><a href="consultora.html">Consultora</a><a href="admin.html" class="active">Administrador</a><a href="candidato.html">Candidato</a></nav>
+      <button class="menu-toggle" aria-label="Abrir menu">☰</button>
+    </div>
+  </header>
+  <div class="container" id="globalNoticeHost" style="margin-top:16px;"></div>
+
+  <main class="section">
+    <div class="container dashboard-layout">
+      <aside class="sidebar card">
+        <h2>Administrador</h2>
+        <div class="vertical-tabs">
+          <button class="tab-btn active" data-tab="painel">Painel Geral</button>
+          <button class="tab-btn" data-tab="perfis">Gestão de Usuários</button>
+          <button class="tab-btn" data-tab="planos">Planos e Serviços</button>
+          <button class="tab-btn" data-tab="relatorios">Relatórios Estratégicos</button>
+          <button class="tab-btn" data-tab="config">Configurações Avançadas</button>
+        </div>
+      </aside>
+      <section class="dashboard-content">
+        <div class="panel card active" id="tab-painel">
+          <div class="panel-head"><div><span class="section-tag">Acesso total</span><h1>Painel Geral</h1></div><div class="badge">Gestão completa • <span data-runtime-mode>Modo local</span></div></div>
+          <div class="cards-grid four stats-grid">
+            <article class="mini-card"><strong id="adminCandidateCount">0</strong><p>Candidatos</p></article>
+            <article class="mini-card"><strong id="adminUserCount">0</strong><p>Usuários do sistema</p></article>
+            <article class="mini-card"><strong id="adminJobCount">0</strong><p>Vagas</p></article>
+            <article class="mini-card"><strong id="adminFeedbackCount">0</strong><p>Pareceres</p></article>
+          </div>
+
+          <div class="card nested-card">
+            <div class="panel-head compact-head">
+              <div><span class="section-tag">Resumo rápido</span><h2>Usuários cadastrados no sistema</h2></div>
+              <div class="badge"><span id="adminUsersBadgeCount">0</span> usuário(s)</div>
+            </div>
+            <div id="adminUsersPreview" class="cards-grid two"></div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-perfis">
+          <div class="panel-head"><div><span class="section-tag">Gestão de acessos</span><h2>Controle de usuários e senhas</h2><p>Crie, edite, exclua e consulte os acessos sem sair da área administrativa.</p></div></div>
+
+          <div id="adminUserNoticeHost"></div>
+
+          <div class="card nested-card">
+            <div class="panel-head compact-head">
+              <div>
+                <span class="section-tag">Cadastro de acesso</span>
+                <h3 id="adminUserFormTitle">Adicionar novo usuário</h3>
+              </div>
+              <div class="badge">Login e senha visíveis para o administrador</div>
+            </div>
+
+            <form id="adminUserForm" class="form-grid">
+              <input type="hidden" name="userId" id="adminUserId" />
+
+              <label>
+                <span>Nome do usuário</span>
+                <input type="text" name="nome" id="adminUserNome" placeholder="Ex.: Erika Santos" required />
+              </label>
+
+              <label>
+                <span>Login do usuário</span>
+                <input type="text" name="login" id="adminUserLogin" placeholder="Ex.: erika.santos" required />
+              </label>
+
+              <label>
+                <span>Senha</span>
+                <input type="text" name="senha" id="adminUserSenha" placeholder="Digite a senha" required />
+              </label>
+
+              <label>
+                <span>Perfil</span>
+                <select name="perfil" id="adminUserPerfil" required>
+                  <option value="Administrador">Administrador</option>
+                  <option value="Empresa">Empresa</option>
+                  <option value="Consultora">Consultora</option>
+                  <option value="Candidato">Candidato</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Status</span>
+                <select name="status" id="adminUserStatus" required>
+                  <option value="Ativo">Ativo</option>
+                  <option value="Bloqueado">Bloqueado</option>
+                  <option value="Em análise">Em análise</option>
+                </select>
+              </label>
+
+              <label>
+                <span>Telefone ou contato</span>
+                <input type="text" name="contato" id="adminUserContato" placeholder="Ex.: (64) 99999-9999" />
+              </label>
+
+              <label class="full">
+                <span>Observações internas</span>
+                <textarea name="observacoes" id="adminUserObservacoes" rows="4" placeholder="Anotações internas sobre o acesso, setor ou situação do usuário."></textarea>
+              </label>
+
+              <div class="form-actions full">
+                <button type="submit" class="btn btn-primary" id="adminUserSubmitBtn">Salvar usuário</button>
+                <button type="button" class="btn btn-secondary" id="adminUserCancelEditBtn">Limpar / cancelar edição</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="card nested-card">
+            <div class="panel-head compact-head admin-toolbar">
+              <div>
+                <span class="section-tag">Usuários cadastrados</span>
+                <h3>Lista completa de logins e senhas</h3>
+              </div>
+              <label class="toolbar-search">
+                <span>Buscar</span>
+                <input type="search" id="adminUserSearch" placeholder="Nome, login ou perfil" />
+              </label>
+            </div>
+
+            <div id="adminUsersList" class="stack-list"></div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-planos">
+          <div class="panel-head"><div><span class="section-tag">Planos, pagamentos e permissões</span><h2>Planos e Serviços</h2></div></div>
+          <div class="cards-grid three">
+            <article class="mini-card"><strong>Plano Essencial</strong><p>Cadastro empresarial, acesso básico a perfis e triagem inicial.</p></article>
+            <article class="mini-card"><strong>Plano Profissional</strong><p>Relatórios, pareceres especializados e suporte consultivo.</p></article>
+            <article class="mini-card"><strong>Serviços avulsos</strong><p>Currículo estratégico, testes, avaliações e pareceres individuais.</p></article>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-relatorios">
+          <div class="panel-head"><div><span class="section-tag">Relatórios estratégicos</span><h2>Visão consolidada</h2></div></div>
+          <table class="table">
+            <thead><tr><th>Métrica</th><th>Resultado</th></tr></thead>
+            <tbody>
+              <tr><td>Total de candidatos cadastrados</td><td id="reportCandidates">0</td></tr>
+              <tr><td>Total de usuários do sistema</td><td id="reportUsers">0</td></tr>
+              <tr><td>Total de vagas cadastradas</td><td id="reportJobs">0</td></tr>
+              <tr><td>Total de pareceres lançados</td><td id="reportFeedbacks">0</td></tr>
+              <tr><td>Modelo do sistema</td><td>Banco de Talentos com triagem técnica e acompanhamento psicossocial</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel card" id="tab-config">
+          <div class="panel-head"><div><span class="section-tag">Configurações avançadas</span><h2>Parâmetros gerais</h2></div></div>
+          <div class="cards-grid two">
+            <article class="mini-card"><strong>Conteúdo e acessos</strong><p>A área administrativa agora já permite cadastrar, editar e excluir logins do sistema direto pelo painel.</p></article>
+            <article class="mini-card"><strong>Atualizações do sistema</strong><p>Estrutura pronta para evoluir com autenticação mais robusta, permissões reais e fluxo de recuperação de senha no futuro.</p></article>
+          </div>
+          <button class="btn btn-secondary" id="clearLocalData">Limpar dados locais de demonstração</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Área da Consultora | Banco de Talentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="consultora">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand brand-only-logo" href="index.html" aria-label="Banco de Talentos Conduzir"><img class="brand-logo-img" src="assets/conduzir-logo.png" alt="Logo Conduzir" /></a>
+      <nav class="main-nav"><a href="index.html">Início</a><a href="empresa.html">Empresa</a><a href="consultora.html" class="active">Consultora</a><a href="admin.html">Administrador</a><a href="candidato.html">Candidato</a></nav>
+      <button class="menu-toggle" aria-label="Abrir menu">☰</button>
+    </div>
+  </header>
+  <div class="container" id="globalNoticeHost" style="margin-top:16px;"></div>
+
+  <main class="section">
+    <div class="container dashboard-layout">
+      <aside class="sidebar card">
+        <h2>Consultora</h2>
+        <div class="vertical-tabs">
+          <button class="tab-btn active" data-tab="painel">Painel Técnico</button>
+          <button class="tab-btn" data-tab="candidatos">Candidatos</button>
+          <button class="tab-btn" data-tab="pareceres">Testes e Pareceres</button>
+          <button class="tab-btn" data-tab="anotacoes">Anotações Internas</button>
+          <button class="tab-btn" data-tab="agenda">Agenda de Entrevistas</button>
+        </div>
+      </aside>
+      <section class="dashboard-content">
+        <div class="panel card active" id="tab-painel">
+          <div class="panel-head"><div><span class="section-tag">Acesso limitado e técnico</span><h1>Painel Técnico</h1></div><div class="badge">Login exclusivo • <span data-runtime-mode>Modo local</span></div></div>
+          <div class="cards-grid three">
+            <article class="mini-card"><strong>Triagem de currículos</strong><p>Organização de perfis por compatibilidade técnica e humana.</p></article>
+            <article class="mini-card"><strong>Leitura comportamental</strong><p>Análise de comunicação, valores, postura e aderência cultural.</p></article>
+            <article class="mini-card"><strong>Acompanhamento</strong><p>Registro de testes, entrevistas e observações qualificadas.</p></article>
+          </div>
+          <div class="cards-grid three top-gap">
+            <article class="mini-card"><strong id="consultantCandidateCount">0</strong><p>Candidatos disponíveis</p></article>
+            <article class="mini-card"><strong id="consultantFeedbackCount">0</strong><p>Pareceres lançados</p></article>
+            <article class="mini-card"><strong id="consultantInterviewCount">0</strong><p>Entrevistas acompanhadas</p></article>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-candidatos">
+          <div class="panel-head"><div><span class="section-tag">Candidatos</span><h2>Base para triagem</h2></div></div>
+          <div id="consultantCandidates" class="cards-grid two"></div>
+        </div>
+
+        <div class="panel card" id="tab-pareceres">
+          <div class="panel-head"><div><span class="section-tag">Testes e pareceres</span><h2>Inserção de devolutivas</h2></div></div>
+          <form class="form-grid" id="feedbackForm">
+            <label><span>Nome do candidato</span><input name="candidato" placeholder="Ex.: João da Silva" required /></label>
+            <label><span>Status técnico</span><select name="status"><option>Aprovado para próxima etapa</option><option>Em observação</option><option>Não aderente no momento</option></select></label>
+            <label><span>Resultado do teste</span><input name="resultado" placeholder="Ex.: Perfil aderente / Técnico bom desempenho"></label>
+            <label><span>Tipo de avaliação</span><select name="tipo"><option>Parecer técnico</option><option>Entrevista inicial</option><option>Avaliação comportamental</option><option>Teste específico</option></select></label>
+            <label class="full"><span>Parecer técnico e comportamental</span><textarea name="parecer" rows="5" placeholder="Descreva as observações da triagem, pontos fortes, riscos e aderência."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar parecer</button></div>
+          </form>
+          <div id="feedbackList" class="stack-list"></div>
+        </div>
+
+        <div class="panel card" id="tab-anotacoes">
+          <div class="panel-head"><div><span class="section-tag">Anotações internas</span><h2>Comunicação com administração</h2></div></div>
+          <form id="internalNoteForm" class="form-grid">
+            <label><span>Título interno</span><input name="titulo" placeholder="Ex.: Alinhamento com admin"></label>
+            <label><span>Área</span><select name="setor"><option>Consultoria</option><option>Administração</option><option>Empresa</option><option>Candidatos</option></select></label>
+            <label class="full"><span>Anotação</span><textarea class="notes-area" name="mensagem" placeholder="Espaço para observações estratégicas, alinhamentos e registros internos."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar anotação</button></div>
+          </form>
+          <div id="internalNotesList" class="stack-list"></div>
+        </div>
+
+        <div class="panel card" id="tab-agenda">
+          <div class="panel-head"><div><span class="section-tag">Agenda de entrevistas</span><h2>Acompanhamento de entrevistas</h2></div></div>
+          <form class="form-grid" id="interviewForm">
+            <label><span>Data</span><input type="date" name="data" required></label>
+            <label><span>Candidato</span><input name="candidato" required placeholder="Nome do candidato"></label>
+            <label><span>Empresa</span><input name="empresa" required placeholder="Nome da empresa"></label>
+            <label><span>Formato</span><select name="formato"><option>Online</option><option>Presencial</option><option>Telefone</option></select></label>
+            <label><span>Situação</span><select name="status"><option>Agendada</option><option>Confirmada</option><option>Realizada</option><option>Reagendar</option></select></label>
+            <label class="full"><span>Observações</span><textarea name="observacoes" rows="3" placeholder="Observações sobre a entrevista."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar entrevista</button></div>
+          </form>
+          <table class="table top-gap">
+            <thead><tr><th>Data</th><th>Candidato</th><th>Empresa</th><th>Formato</th><th>Situação</th></tr></thead>
+            <tbody id="interviewTableBody"><tr><td>—</td><td>Nenhuma entrevista cadastrada</td><td>—</td><td>—</td><td>—</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

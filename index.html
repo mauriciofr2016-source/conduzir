@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Banco de Talentos | Conduzir Pessoas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar topbar-home">
+    <div class="container topbar-inner topbar-inner-home">
+      <div class="topbar-nav-row">
+        <a class="brand" href="index.html">
+          <img class="brand-logo-img" src="assets/conduzir-logo.png" alt="Logo Conduzir" />
+          <div>
+            <strong>Banco de Talentos</strong>
+            <small>Conduzir Pessoas</small>
+          </div>
+        </a>
+        <nav class="main-nav" aria-label="Principal">
+          <a href="index.html" class="active">Início</a>
+          <a href="empresa.html">Empresa</a>
+          <a href="consultora.html">Consultora</a>
+          <a href="admin.html">Administrador</a>
+          <a href="candidato.html" class="btn btn-nav">Candidato</a>
+        </nav>
+        <button class="menu-toggle" aria-label="Abrir menu">☰</button>
+      </div>
+
+      <div class="topbar-hero-banner">
+        <div class="topbar-hero-brand-card">
+          <img src="assets/conduzir-logo.png" alt="Logo Conduzir" />
+          <div>
+            <span class="hero-banner-mini-tag">Plataforma de recrutamento humanizado</span>
+            <strong>Conduzir Talentos</strong>
+            <small>Banco de talentos estruturado para empresas, consultoras e candidatos.</small>
+          </div>
+        </div>
+        <div class="topbar-hero-copy">
+          <p>Não conectamos vagas a currículos.<br>Conectamos pessoas a propósitos.</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="container" id="globalNoticeHost" style="margin-top:16px;"></div>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-grid hero-grid-single">
+        <div>
+          <span class="eyebrow">Plataforma de recrutamento humanizado</span>
+          <h1>Triagem técnica, acompanhamento psicossocial e conexão com aderência cultural.</h1>
+          <p class="lead">Uma plataforma estruturada de banco de talentos para conectar candidatos qualificados a empresas com mais precisão, humanidade e coerência com os valores de cada oportunidade.</p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="candidato.html">Criar perfil do candidato</a>
+            <a class="btn btn-secondary" href="#funcionalidades">Ver funcionalidades</a>
+          </div>
+          <div class="hero-metrics">
+            <article>
+              <strong>4 áreas</strong>
+              <span>Candidato, Empresa, Consultora e Admin</span>
+            </article>
+            <article>
+              <strong>Triagem completa</strong>
+              <span>Técnica, comportamental e psicossocial</span>
+            </article>
+            <article>
+              <strong>Foco em aderência</strong>
+              <span>Valores, cultura e propósito</span>
+            </article>
+          </div>
+        </div>
+        <aside class="hero-side-grid hero-side-grid-single">
+          <article class="hero-card candidate-hero-card">
+            <div class="candidate-hero-head">
+              <div>
+                <span class="section-tag">Perfis em destaque</span>
+                <h2>Perfis dos candidatos</h2>
+              </div>
+              <a class="text-link" href="empresa.html">Ver banco completo</a>
+            </div>
+            <div id="homeCandidateCards" class="home-candidate-grid"></div>
+          </article>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container objective-grid">
+        <article class="card objective-copy-card">
+          <span class="section-tag">Objetivo</span>
+          <h2>Estruturar um banco de talentos completo</h2>
+          <p>Desenvolver uma plataforma estruturada de banco de talentos com triagem técnica e acompanhamento psicossocial, que conecte candidatos qualificados a oportunidades profissionais, promovendo eficiência nos processos seletivos e valorização do perfil humano no mercado de trabalho.</p>
+        </article>
+        <article class="objective-image-card">
+          <img src="assets/objetivo-alvo.png" alt="Imagem de alvo com flechas representando foco e objetivo do projeto" />
+        </article>
+      </div>
+    </section>
+
+    <section class="section muted">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-tag">Dor do mercado</span>
+          <h2>O que a plataforma se propõe a corrigir</h2>
+        </div>
+        <div class="grid-2">
+          <article class="card danger-border">
+            <h3>Empresas enfrentam</h3>
+            <ul class="feature-list">
+              <li>Contratações erradas e alta rotatividade</li>
+              <li>Perda de tempo e recursos com triagens mal feitas</li>
+              <li>Dificuldade para avaliar valores e comportamento</li>
+              <li>Baixa aderência cultural entre vaga e profissional</li>
+            </ul>
+          </article>
+          <article class="card danger-border">
+            <h3>Candidatos enfrentam</h3>
+            <ul class="feature-list">
+              <li>Baixa visibilidade das competências humanas</li>
+              <li>Dificuldade de posicionamento estratégico</li>
+              <li>Processos seletivos frios e impessoais</li>
+              <li>Pouco acompanhamento durante a jornada</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="funcionalidades">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-tag">Como solucionamos</span>
+          <h2>Diferenciais centrais da proposta</h2>
+        </div>
+        <div class="cards-grid three">
+          <article class="card">
+            <h3>Triagem técnica e psicológica</h3>
+            <p>Análise aprofundada das competências técnicas, do perfil comportamental e da dimensão emocional dos candidatos.</p>
+          </article>
+          <article class="card">
+            <h3>Olhar humanizado</h3>
+            <p>História, propósito, valores e estilo de comunicação entram na avaliação, não apenas o currículo.</p>
+          </article>
+          <article class="card">
+            <h3>Aderência cultural</h3>
+            <p>A plataforma prioriza compatibilidade com missão, visão e rotina da empresa para reduzir desalinhamentos.</p>
+          </article>
+          <article class="card">
+            <h3>Serviços personalizados</h3>
+            <p>Currículo estratégico, orientação de carreira, testes profissionais e pareceres técnicos especializados.</p>
+          </article>
+          <article class="card">
+            <h3>Organização por perfil</h3>
+            <p>Cada público possui seu próprio ambiente: candidato, empresa, consultora e administrador.</p>
+          </article>
+          <article class="card">
+            <h3>Acompanhamento contínuo</h3>
+            <p>Mais clareza sobre status, entrevistas, devolutivas e evolução do processo seletivo.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section muted">
+      <div class="container">
+        <div class="section-head">
+          <span class="section-tag">Áreas do sistema</span>
+          <h2>Estrutura fiel ao arquivo enviado</h2>
+        </div>
+        <div class="cards-grid four">
+          <article class="card role-card">
+            <h3>Candidato</h3>
+            <p>Cadastro, perfil, currículo, testes e avaliações, entrevistas, serviços adicionais e status dos processos.</p>
+            <a class="text-link" href="candidato.html">Abrir área do candidato</a>
+          </article>
+          <article class="card role-card">
+            <h3>Empresa</h3>
+            <p>Minhas vagas, cadastrar vaga, candidatos recebidos, relatórios e contato com consultora.</p>
+            <a class="text-link" href="empresa.html">Abrir área da empresa</a>
+          </article>
+          <article class="card role-card">
+            <h3>Consultora</h3>
+            <p>Painel técnico, candidatos, testes e pareceres, anotações internas e agenda de entrevistas.</p>
+            <a class="text-link" href="consultora.html">Abrir área da consultora</a>
+          </article>
+          <article class="card role-card">
+            <h3>Administrador</h3>
+            <p>Painel geral, gestão de perfis, planos e serviços, relatórios estratégicos e configurações avançadas.</p>
+            <a class="text-link" href="admin.html">Abrir área do administrador</a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container cta-banner">
+        <div>
+          <span class="section-tag">Conclusão do projeto</span>
+          <h2>Mais do que um banco de dados, uma plataforma de relações significativas.</h2>
+          <p>Empresas não precisam apenas de talentos técnicos. Precisam de pessoas inteiras. E profissionais não buscam apenas um emprego: buscam reconhecimento, coerência e pertencimento.</p>
+        </div>
+        <a class="btn btn-primary" href="candidato.html">Começar agora</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <p>Banco de Talentos • Conduzir Pessoas</p>
+      <p>Base pronta para GitHub Pages</p>
+    </div>
+  </footer>
+
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Área da Empresa | Banco de Talentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="empresa">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand brand-only-logo" href="index.html" aria-label="Banco de Talentos Conduzir"><img class="brand-logo-img" src="assets/conduzir-logo.png" alt="Logo Conduzir" /></a>
+      <nav class="main-nav"><a href="index.html">Início</a><a href="empresa.html" class="active">Empresa</a><a href="consultora.html">Consultora</a><a href="admin.html">Administrador</a><a href="candidato.html">Candidato</a></nav>
+      <button class="menu-toggle" aria-label="Abrir menu">☰</button>
+    </div>
+  </header>
+  <div class="container" id="globalNoticeHost" style="margin-top:16px;"></div>
+
+  <main class="section">
+    <div class="container dashboard-layout">
+      <aside class="sidebar card">
+        <h2>Empresa</h2>
+        <div class="vertical-tabs">
+          <button class="tab-btn active" data-tab="vagas">Minhas Vagas</button>
+          <button class="tab-btn" data-tab="cadastrar-vaga">Cadastrar Vaga</button>
+          <button class="tab-btn" data-tab="candidatos">Candidatos Recebidos</button>
+          <button class="tab-btn" data-tab="relatorios">Relatórios</button>
+          <button class="tab-btn" data-tab="contato">Contato com Consultora</button>
+        </div>
+      </aside>
+      <section class="dashboard-content">
+        <div class="panel card active" id="tab-vagas">
+          <div class="panel-head"><div><span class="section-tag">Cadastro e login com plano contratado</span><h1>Minhas Vagas</h1></div><div class="badge">Plano empresarial • <span data-runtime-mode>Modo local</span></div></div>
+          <table class="table">
+            <thead><tr><th>Vaga</th><th>Área</th><th>Modelo</th><th>Status</th></tr></thead>
+            <tbody id="jobsTable"><tr><td>Analista de RH</td><td>Recursos Humanos</td><td>Presencial</td><td>Aberta</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="panel card" id="tab-cadastrar-vaga">
+          <div class="panel-head"><div><span class="section-tag">Cadastrar vaga</span><h2>Nova oportunidade</h2></div></div>
+          <form class="form-grid" id="jobForm">
+            <label><span>Título da vaga</span><input name="titulo" required placeholder="Ex.: Analista Administrativo" /></label>
+            <label><span>Área</span><input name="area" required placeholder="Ex.: Administrativo" /></label>
+            <label><span>Região</span><input name="regiao" placeholder="Cidade / Estado" /></label>
+            <label><span>Modelo</span><select name="modelo"><option>Presencial</option><option>Híbrido</option><option>Remoto</option></select></label>
+            <label class="full"><span>Descrição</span><textarea name="descricao" rows="4" placeholder="Descreva a função, responsabilidades e requisitos."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar vaga</button></div>
+          </form>
+        </div>
+
+        <div class="panel card" id="tab-candidatos">
+          <div class="panel-head"><div><span class="section-tag">Pesquisa de candidatos por área, perfil ou região</span><h2>Candidatos Recebidos</h2></div></div>
+          <div class="card nested-card">
+            <div class="filter-grid">
+              <label><span>Buscar por nome</span><input type="search" id="companyCandidateSearch" placeholder="Digite nome ou e-mail"></label>
+              <label><span>Área</span><input type="search" id="companyCandidateAreaFilter" placeholder="Ex.: RH"></label>
+              <label><span>Região</span><input type="search" id="companyCandidateRegionFilter" placeholder="Cidade / Estado"></label>
+            </div>
+          </div>
+          <div id="candidateCards" class="cards-grid two"></div>
+        </div>
+
+        <div class="panel card" id="tab-relatorios">
+          <div class="panel-head"><div><span class="section-tag">Relatórios</span><h2>Visualização estratégica</h2></div></div>
+          <div class="cards-grid three">
+            <article class="mini-card"><strong>Perfis ativos</strong><p id="metricCandidates">0 candidatos cadastrados localmente.</p></article>
+            <article class="mini-card"><strong>Vagas abertas</strong><p id="metricJobs">0 vagas registradas.</p></article>
+            <article class="mini-card"><strong>Aderência cultural</strong><p>Análise qualitativa conduzida pela consultoria.</p></article>
+          </div>
+          <table class="table top-gap">
+            <thead><tr><th>Indicador</th><th>Leitura</th></tr></thead>
+            <tbody>
+              <tr><td>Candidatos disponíveis para consulta</td><td id="companyReportCandidates">0</td></tr>
+              <tr><td>Vagas abertas cadastradas</td><td id="companyReportJobs">0</td></tr>
+              <tr><td>Solicitações à consultora</td><td id="companyReportRequests">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel card" id="tab-contato">
+          <div class="panel-head"><div><span class="section-tag">Contato com consultora</span><h2>Solicitação de entrevistas, testes ou pareceres</h2></div></div>
+          <form class="form-grid" id="companyRequestForm">
+            <label><span>Empresa</span><input name="empresa" required placeholder="Nome da empresa"></label>
+            <label><span>Tipo de solicitação</span><select name="tipo" required><option>Entrevista</option><option>Teste</option><option>Parecer técnico</option><option>Alinhamento de processo</option></select></label>
+            <label><span>Contato responsável</span><input name="responsavel" placeholder="Seu nome"></label>
+            <label><span>WhatsApp ou e-mail</span><input name="contato" placeholder="Telefone ou e-mail"></label>
+            <label class="full"><span>Mensagem</span><textarea name="mensagem" rows="4" placeholder="Descreva a necessidade da empresa."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Enviar solicitação</button><a class="btn btn-secondary" href="https://wa.me/5500000000000" target="_blank" rel="noopener">Abrir contato no WhatsApp</a></div>
+          </form>
+          <div id="companyRequestsList" class="stack-list"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
