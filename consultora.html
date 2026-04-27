@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Área da Consultora | Banco de Talentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="consultora">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand brand-only-logo" href="index.html" aria-label="Banco de Talentos Conduzir"><img class="brand-logo-img" src="assets/conduzir-logo.png" alt="Logo Conduzir" /></a>
+      <nav class="main-nav"><a href="index.html">Site público</a><a href="consultora.html" class="active">Consultora</a></nav>
+      <button class="menu-toggle" aria-label="Abrir menu">☰</button>
+    </div>
+  </header>
+  <div class="container" id="globalNoticeHost" style="margin-top:16px;"></div>
+
+  <main class="section">
+    <div class="container auth-shell" id="systemAuthShell-consultora">
+      <section class="card">
+        <div class="auth-shell-head">
+          <div>
+            <span class="section-tag">Acesso criado pelo administrador</span>
+            <h1>Consultora</h1>
+            <p class="auth-shell-copy">A consultora entra com login e senha cadastrados pelo administrador. Aqui ela recebe os serviços avulsos contratados pelas empresas, registra entrevistas, pareceres e entrega os serviços concluídos.</p>
+          </div>
+          <div class="badge">Acesso exclusivo • <span data-runtime-mode>Modo local</span></div>
+        </div>
+        <form class="form-grid auth-single-form" id="systemLoginForm-consultora">
+          <label><span>Usuário</span><input name="login" required placeholder="Seu usuário" autocomplete="username" /></label>
+          <label><span>Senha</span><input type="password" name="senha" required placeholder="Sua senha" autocomplete="current-password" /></label>
+          <div class="form-actions"><button class="btn btn-primary" type="submit">Entrar</button></div>
+        </form>
+        <div id="systemAuthNoticeHost-consultora"></div>
+      </section>
+    </div>
+
+    <div class="container dashboard-layout is-hidden" id="systemDashboard-consultora">
+      <aside class="sidebar card">
+        <div class="candidate-sidebar-head">
+          <div>
+            <h2>Consultora</h2>
+            <p id="systemLoggedUser-consultora" class="sidebar-user-text">Nenhuma consultora logada</p>
+          </div>
+          <button class="btn btn-secondary sidebar-logout-btn" type="button" id="systemLogoutBtn-consultora">Sair</button>
+        </div>
+        <div class="vertical-tabs">
+          <button class="tab-btn active" data-tab="painel">Painel Técnico</button>
+          <button class="tab-btn" data-tab="candidatos">Candidatos</button>
+          <button class="tab-btn" data-tab="pareceres">Testes e Pareceres</button>
+          <button class="tab-btn" data-tab="servicos">Serviços Contratados</button>
+          <button class="tab-btn" data-tab="anotacoes">Anotações Internas</button>
+          <button class="tab-btn" data-tab="agenda">Agenda de Entrevistas</button>
+        </div>
+      </aside>
+      <section class="dashboard-content">
+        <div class="panel card active" id="tab-painel">
+          <div class="panel-head"><div><span class="section-tag">Acesso limitado e técnico</span><h1>Painel Técnico</h1></div><div class="badge">Login exclusivo • <span data-runtime-mode>Modo local</span></div></div>
+          <div class="cards-grid three">
+            <article class="mini-card"><strong>Triagem de currículos</strong><p>Organização de perfis por compatibilidade técnica e humana.</p></article>
+            <article class="mini-card"><strong>Leitura comportamental</strong><p>Análise de comunicação, valores, postura e aderência cultural.</p></article>
+            <article class="mini-card"><strong>Acompanhamento</strong><p>Registro de testes, entrevistas e observações qualificadas.</p></article>
+          </div>
+          <div class="cards-grid three top-gap">
+            <article class="mini-card"><strong id="consultantCandidateCount">0</strong><p>Candidatos disponíveis</p></article>
+            <article class="mini-card"><strong id="consultantFeedbackCount">0</strong><p>Pareceres lançados</p></article>
+            <article class="mini-card"><strong id="consultantInterviewCount">0</strong><p>Entrevistas acompanhadas</p></article>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-candidatos">
+          <div class="panel-head"><div><span class="section-tag">Candidatos</span><h2>Base para triagem</h2></div></div>
+          <div id="consultantCandidates" class="cards-grid two"></div>
+        </div>
+
+        <div class="panel card" id="tab-pareceres">
+          <div class="panel-head"><div><span class="section-tag">Testes e pareceres</span><h2>Inserção de devolutivas</h2></div></div>
+          <form class="form-grid" id="feedbackForm">
+            <label><span>Nome do candidato</span><input name="candidato" placeholder="Ex.: João da Silva" required /></label>
+            <label><span>E-mail do candidato</span><input name="candidateEmail" type="email" placeholder="candidato@email.com" /></label>
+            <label><span>Status técnico</span><select name="status"><option>Aprovado para próxima etapa</option><option>Em observação</option><option>Não aderente no momento</option><option>Validado pela consultora</option><option>Avaliação DISC solicitada</option></select></label>
+            <label><span>Resultado do teste</span><input name="resultado" placeholder="Ex.: Perfil aderente / Técnico bom desempenho"></label>
+            <label><span>Selo Conduzir</span><select name="seloConduzir"><option value="false">Não liberar selo ainda</option><option value="true">Liberar selo Validado pela Conduzir</option></select></label>
+            <label><span>Área estratégica</span><input name="areaEstrategica" placeholder="Ex.: Agro, administrativo, comercial" /></label>
+            <label><span>Nível estratégico</span><select name="nivelEstrategico"><option>Operacional</option><option>Técnico</option><option>Administrativo</option><option>Especialista</option><option>Liderança</option></select></label>
+            <label class="full"><span>Perfil comportamental / DISC</span><textarea name="perfilComportamental" rows="3" placeholder="Registre comunicação, postura, valores, resultado DISC ou pontos comportamentais relevantes."></textarea></label>
+            <label class="full"><span>Entrevista psicossocial</span><textarea name="entrevistaPsicossocial" rows="3" placeholder="Registre observações da entrevista, riscos, motivadores e aderência cultural."></textarea></label>
+            <label class="full"><span>Pontos fortes</span><textarea name="pontosFortes" rows="3" placeholder="Diferenciais, competências e atitudes positivas."></textarea></label>
+            <label class="full"><span>Pontos a desenvolver</span><textarea name="pontosDesenvolver" rows="3" placeholder="Pontos que precisam de acompanhamento ou desenvolvimento."></textarea></label>
+            <label><span>Tipo de avaliação</span><select name="tipo"><option>Parecer técnico</option><option>Entrevista inicial</option><option>Avaliação comportamental</option><option>Teste específico</option></select></label>
+            <label class="full"><span>Parecer técnico e comportamental</span><textarea name="parecer" rows="5" placeholder="Descreva as observações da triagem, pontos fortes, riscos e aderência."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar parecer</button></div>
+          </form>
+          <div id="feedbackList" class="stack-list"></div>
+        </div>
+
+        <div class="panel card" id="tab-servicos">
+          <div class="panel-head"><div><span class="section-tag">Serviços contratados</span><h2>Fila operacional da consultora</h2></div></div>
+          <div id="consultantServiceQueue" class="stack-list"></div>
+          <div class="card nested-card top-gap">
+            <div class="panel-head compact-head"><div><span class="section-tag">Entregar serviço</span><h3>Concluir demanda da empresa</h3></div></div>
+            <form id="serviceDeliveryForm" class="form-grid">
+              <label><span>ID da solicitação</span><input name="requestId" required placeholder="Cole o ID exibido acima" /></label>
+              <label><span>Status da entrega</span><select name="deliveryStatus"><option>Em execução</option><option>Concluído</option><option>Aguardando retorno da empresa</option></select></label>
+              <label class="full"><span>Mensagem de devolutiva</span><textarea name="deliveryMessage" rows="4" placeholder="Descreva o andamento ou a entrega do serviço."></textarea></label>
+              <div class="full form-actions"><button class="btn btn-primary" type="submit">Atualizar serviço</button></div>
+            </form>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-anotacoes">
+          <div class="panel-head"><div><span class="section-tag">Anotações internas</span><h2>Comunicação com administração</h2></div></div>
+          <form id="internalNoteForm" class="form-grid">
+            <label><span>Título interno</span><input name="titulo" placeholder="Ex.: Alinhamento com admin"></label>
+            <label><span>Área</span><select name="setor"><option>Consultoria</option><option>Administração</option><option>Empresa</option><option>Candidatos</option></select></label>
+            <label class="full"><span>Anotação</span><textarea class="notes-area" name="mensagem" placeholder="Espaço para observações estratégicas, alinhamentos e registros internos."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar anotação</button></div>
+          </form>
+          <div id="internalNotesList" class="stack-list"></div>
+        </div>
+
+        <div class="panel card" id="tab-agenda">
+          <div class="panel-head"><div><span class="section-tag">Agenda de entrevistas</span><h2>Acompanhamento de entrevistas</h2></div></div>
+          <form class="form-grid" id="interviewForm">
+            <input type="hidden" name="uid">
+            <input type="hidden" name="interviewId">
+            <label><span>Data</span><input type="date" name="data" required></label>
+            <label><span>Horário</span><input type="time" name="horario" required></label>
+            <label><span>Candidato</span><input name="candidato" required placeholder="Nome do candidato"></label>
+            <label><span>E-mail do candidato</span><input name="candidateEmail" type="email" placeholder="candidato@email.com"></label>
+            <label><span>Empresa</span><input name="empresa" required placeholder="Nome da empresa"></label>
+            <label><span>Formato</span><select name="formato"><option>Online</option><option>Presencial</option><option>Google Meet</option><option>Telefone</option></select></label>
+            <label><span>Local presencial</span><input name="local" placeholder="Preencher se for presencial"></label>
+            <input type="hidden" name="status" value="Agendada">
+            <label class="full"><span>Observações</span><textarea name="observacoes" rows="3" placeholder="Observações sobre a entrevista."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar entrevista</button></div>
+          </form>
+          <table class="table top-gap">
+            <thead><tr><th>Data/Horário</th><th>Candidato</th><th>Empresa</th><th>Formato</th><th>Situação / ações</th></tr></thead>
+            <tbody id="interviewTableBody"><tr><td>—</td><td>Nenhuma entrevista cadastrada</td><td>—</td><td>—</td><td>—</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

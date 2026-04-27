@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Área do Candidato | Banco de Talentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="candidato">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand brand-only-logo" href="index.html" aria-label="Banco de Talentos Conduzir"><img class="brand-logo-img" src="assets/conduzir-logo.png" alt="Logo Conduzir" /></a>
+      <nav class="main-nav"><a href="index.html">Início</a><a href="empresa.html">Empresa</a><a href="candidato.html" class="active">Candidato</a></nav>
+      <button class="menu-toggle" aria-label="Abrir menu">☰</button>
+    </div>
+  </header>
+  <div class="container" id="globalNoticeHost" style="margin-top:16px;"></div>
+
+  <main class="section">
+    <div class="container">
+      <section class="card auth-shell" id="candidateAuthShell">
+        <div class="auth-shell-head">
+          <div>
+            <span class="section-tag">Área individual do candidato</span>
+            <h1>Entrar ou criar acesso</h1>
+            <p class="auth-shell-copy">Cada candidato terá acesso somente ao próprio perfil, currículo, testes, entrevistas, serviços e status do processo.</p>
+          </div>
+          <div class="badge">Login individual • <span data-runtime-mode>Modo local</span></div>
+        </div>
+
+        <div class="auth-grid">
+          <article class="card nested-card auth-card">
+            <div class="panel-head compact-head"><div><span class="section-tag">Já tenho acesso</span><h2>Login do candidato</h2></div></div>
+            <form class="form-grid" id="candidateLoginForm">
+              <label><span>E-mail</span><input type="email" name="email" required placeholder="voce@email.com" /></label>
+              <label><span>Senha</span><input type="password" name="senha" required placeholder="Sua senha" /></label>
+              <div class="full form-actions"><button class="btn btn-primary" type="submit" id="candidateLoginBtn">Entrar</button></div>
+            </form>
+          </article>
+
+          <article class="card nested-card auth-card">
+            <div class="panel-head compact-head"><div><span class="section-tag">Primeiro acesso</span><h2>Criar conta do candidato</h2></div></div>
+            <form class="form-grid" id="candidateRegisterForm">
+              <label><span>Nome completo</span><input name="nome" required placeholder="Seu nome completo" /></label>
+              <label><span>E-mail</span><input type="email" name="email" required placeholder="voce@email.com" /></label>
+              <label><span>Senha</span><input type="password" name="senha" minlength="6" required placeholder="Mínimo 6 caracteres" /></label>
+              <label><span>Confirmar senha</span><input type="password" name="confirmarSenha" minlength="6" required placeholder="Repita a senha" /></label>
+              <div class="full form-actions"><button class="btn btn-primary" type="submit" id="candidateRegisterBtn">Criar acesso</button></div>
+            </form>
+          </article>
+        </div>
+
+        <div id="candidateAuthNoticeHost"></div>
+      </section>
+    </div>
+
+    <div class="container dashboard-layout is-hidden" id="candidateDashboard">
+      <aside class="sidebar card">
+        <div class="candidate-sidebar-head">
+          <div>
+            <h2>Candidato</h2>
+            <p id="candidateLoggedUser" class="sidebar-user-text">Nenhum candidato logado</p>
+          </div>
+          <button class="btn btn-secondary sidebar-logout-btn" type="button" id="candidateLogoutBtn">Sair</button>
+        </div>
+        <div class="vertical-tabs">
+          <button class="tab-btn active" data-tab="perfil">Meu Perfil</button>
+          <button class="tab-btn" data-tab="curriculo">Currículo</button>
+          <button class="tab-btn" data-tab="testes">Testes e Avaliações</button>
+          <button class="tab-btn" data-tab="entrevistas">Entrevistas Agendadas</button>
+          <button class="tab-btn" data-tab="servicos">Serviços Adicionais</button>
+          <button class="tab-btn" data-tab="status">Status dos Processos</button>
+        </div>
+      </aside>
+      <section class="dashboard-content">
+        <div class="panel card active" id="tab-perfil">
+          <div class="panel-head"><div><span class="section-tag">Cadastro e confirmação de e-mail</span><h1>Meu Perfil</h1></div><div class="badge">Área restrita do candidato • <span data-runtime-mode>Modo local</span></div></div>
+          <form class="form-grid" id="candidateForm">
+            <label><span>Nome completo</span><input name="nome" required placeholder="Seu nome" /></label>
+            <label><span>E-mail</span><input type="email" name="email" required placeholder="voce@email.com" /></label>
+            <label><span>Telefone</span><input name="telefone" placeholder="(00) 00000-0000" /></label>
+            <label><span>Região</span><input name="regiao" placeholder="Cidade / Estado" /></label>
+            <label><span>Área profissional</span><input name="area" placeholder="Ex.: Administrativo, RH, Comercial" /></label>
+            <label><span>Cargo desejado</span><input name="cargoDesejado" placeholder="Ex.: Analista de RH" /></label>
+            <label><span>Nível</span><select name="nivel"><option>Júnior</option><option>Pleno</option><option>Sênior</option><option>Especialista</option><option>Liderança</option></select></label>
+            <label><span>Pretensão salarial</span><input name="pretensaoSalarial" placeholder="Ex.: R$ 2.500,00 / a combinar" /></label>
+            <label><span>Disponibilidade</span><input name="disponibilidade" placeholder="Ex.: Imediata, 30 dias" /></label>
+            <label><span>Modelo de trabalho</span><select name="modeloTrabalho"><option>Presencial</option><option>Híbrido</option><option>Remoto</option><option>Indiferente</option></select></label>
+            <label><span>CNH</span><input name="cnh" placeholder="Ex.: B, AB, não possui" /></label>
+            <label><span>LinkedIn / Portfólio</span><input name="linkedinPortfolio" placeholder="Link do LinkedIn, portfólio ou site" /></label>
+            <label class="full"><span>Resumo profissional</span><textarea name="resumo" rows="4" placeholder="Conte sua trajetória, objetivo profissional, principais resultados e diferenciais."></textarea></label>
+            <label class="full"><span>Experiências profissionais</span><textarea name="experiencias" rows="5" placeholder="Empresa, cargo, período, principais atividades e resultados. Separe uma experiência por linha ou parágrafo."></textarea></label>
+            <label class="full"><span>Formação acadêmica</span><textarea name="formacao" rows="3" placeholder="Curso, instituição, ano de conclusão ou previsão."></textarea></label>
+            <label class="full"><span>Cursos e certificações</span><textarea name="cursosCertificacoes" rows="3" placeholder="Cursos, certificados, treinamentos e capacitações relevantes."></textarea></label>
+            <label class="full"><span>Competências técnicas</span><textarea name="competencias" rows="3" placeholder="Ferramentas, sistemas, processos, rotinas e conhecimentos técnicos."></textarea></label>
+            <label class="full"><span>Idiomas</span><textarea name="idiomas" rows="2" placeholder="Ex.: Inglês intermediário, espanhol básico."></textarea></label>
+            <label class="full"><span>Valores e estilo de trabalho</span><textarea name="valores" rows="3" placeholder="Ex.: colaboração, organização, ética, comunicação, liderança."></textarea></label>
+            <label><span>Nome do arquivo/link do currículo</span><input name="curriculoArquivo" placeholder="Ex.: curriculo-mauricio.pdf ou link" /></label>
+            <label><span>Enviar currículo como arquivo</span><input type="file" name="curriculoArquivoFile" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg" /></label>
+            <div class="full inline-success is-info">Nesta versão o arquivo é salvo direto no cadastro para a consultora abrir. Para produção com arquivos grandes, o ideal é ativar Firebase Storage depois.</div>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit" id="candidateSubmitBtn">Salvar perfil</button><button class="btn btn-secondary" type="button" id="fillCandidateDemo">Preencher demonstração</button></div>
+            <div class="full inline-success" id="candidateSuccessMessage" role="status" aria-live="polite" style="display:none;">Seus dados foram salvos com sucesso.</div>
+          </form>
+        </div>
+
+        <div class="panel card" id="tab-curriculo">
+          <div class="panel-head"><div><span class="section-tag">Currículo</span><h2>Currículo estratégico</h2></div></div>
+          <div class="info-grid two">
+            <article class="mini-card"><strong>Upload de currículo</strong><p id="curriculoNome">Nenhum currículo informado.</p></article>
+            <article class="mini-card"><strong>Orientação de carreira</strong><p>Espaço para revisão de posicionamento, narrativa profissional e preparação para oportunidades.</p></article>
+          </div>
+          <div class="card nested-card">
+            <div class="panel-head compact-head"><div><span class="section-tag">Resumo do perfil</span><h3>Como seu currículo será visto pela equipe</h3></div></div>
+            <div id="candidateProfilePreview" class="cards-grid two"></div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-testes">
+          <div class="panel-head"><div><span class="section-tag">Testes e Avaliações</span><h2>Acompanhamento técnico e comportamental</h2></div></div>
+          <div class="cards-grid three" id="candidateTestsGrid">
+            <article class="mini-card"><strong>Perfil comportamental</strong><p>Status: aguardando aplicação.</p></article>
+            <article class="mini-card"><strong>Avaliação psicossocial</strong><p>Status: em triagem.</p></article>
+            <article class="mini-card"><strong>Teste técnico</strong><p>Status: ainda não solicitado.</p></article>
+          </div>
+          <div class="card nested-card top-gap" id="discTestBox">
+            <div class="panel-head compact-head"><div><span class="section-tag">Teste DISC</span><h3>Preenchimento comportamental</h3><p>Preencha apenas quando a consultora solicitar. O resultado fica disponível para a consultora e, se seu perfil for validado, aparece no perfil resumido visto pela empresa.</p></div></div>
+            <form class="form-grid disc-professional-form" id="discForm">
+              <label class="full"><span>Seu e-mail</span><input type="email" name="candidateEmail" placeholder="Use o mesmo e-mail do cadastro" required></label>
+              <div class="full disc-intro-box">
+                <strong>Avaliação DISC Profissional Conduzir</strong>
+                <p>Responda com sinceridade, pensando em como você normalmente age no trabalho. Não existe resposta certa ou errada. O sistema calcula percentuais de Dominância, Influência, Estabilidade e Conformidade para apoiar a triagem da consultora.</p>
+              </div>
+              <div class="full disc-questionnaire" id="discQuestionnaire"></div>
+              <label class="full"><span>Observações do candidato</span><textarea name="observacoes" rows="3" placeholder="Conte como você costuma agir sob pressão, em equipe, diante de metas, regras e mudanças."></textarea></label>
+              <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar teste DISC profissional</button></div>
+            </form>
+            <div id="candidateDiscResult" class="stack-list"></div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-entrevistas">
+          <div class="panel-head"><div><span class="section-tag">Entrevistas</span><h2>Agenda e acompanhamento</h2></div></div>
+          <table class="table">
+            <thead><tr><th>Data/Horário</th><th>Empresa</th><th>Formato</th><th>Status</th><th>Google Meet / Local</th></tr></thead>
+            <tbody id="candidateInterviews"><tr><td>—</td><td>Nenhuma entrevista agendada</td><td>—</td><td>—</td><td>—</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="panel card" id="tab-servicos">
+          <div class="panel-head"><div><span class="section-tag">Serviços adicionais</span><h2>Solicitações disponíveis</h2></div></div>
+          <div class="cards-grid three" id="candidateHighlightPlanCards"></div>
+          <div class="cards-grid three">
+            <article class="mini-card"><strong>Elaboração de currículo</strong><p>Revisão de estrutura, linguagem e atratividade profissional.</p></article>
+            <article class="mini-card"><strong>Testes profissionais</strong><p>Solicitação de testes complementares conforme área e objetivo.</p></article>
+            <article class="mini-card"><strong>Avaliações</strong><p>Leitura comportamental e parecer orientativo para posicionamento.</p></article>
+          </div>
+          <div class="card nested-card">
+            <div class="panel-head compact-head"><div><span class="section-tag">Quero me destacar</span><h3>Avaliação profissional opcional</h3><p>Solicitação opcional. O pagamento simbólico não garante validação; o selo depende exclusivamente da decisão técnica da consultora.</p></div></div>
+            <form class="form-grid" id="candidateServiceForm">
+              <label><span>Seu e-mail</span><input type="email" name="email" placeholder="Use o mesmo e-mail do cadastro" required></label>
+              <label><span>Tipo de serviço</span><select name="tipo" required><option>Avaliação profissional - Quero me destacar</option><option>Elaboração de currículo</option><option>Teste DISC comportamental</option><option>Teste profissional</option><option>Avaliação comportamental</option><option>Orientação de carreira</option></select></label>
+              <label class="full"><span>Detalhes da solicitação</span><textarea name="mensagem" rows="4" placeholder="Descreva o que você precisa e o objetivo desse serviço."></textarea></label>
+              <div class="full form-actions"><button class="btn btn-primary" type="submit">Enviar solicitação</button></div>
+            </form>
+            <div id="candidateServiceList" class="stack-list"></div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-status">
+          <div class="panel-head"><div><span class="section-tag">Status dos processos</span><h2>Situação atual</h2></div></div>
+          <div class="timeline" id="candidateProcessTimeline">
+            <div class="timeline-item done"><strong>Cadastro realizado</strong><span>Perfil salvo na base do sistema.</span></div>
+            <div class="timeline-item"><strong>Triagem inicial</strong><span>Aguardando análise da consultoria.</span></div>
+            <div class="timeline-item"><strong>Encaminhamento</strong><span>Será atualizado quando houver compatibilidade com vaga.</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <a class="candidate-highlight-fab" href="#tab-servicos" id="candidateHighlightFab" aria-label="Quero me destacar"><img src="assets/conduzir-logo.png" alt=""><span>Quero me destacar</span></a>
+  <button class="help-fab" type="button" id="helpFab" aria-label="Precisa de ajuda? Clique aqui">Precisa de ajuda? Clique aqui</button>
+
+  <div class="help-modal is-hidden" id="helpModal" aria-hidden="true">
+    <div class="help-modal-backdrop" data-help-close></div>
+    <div class="help-modal-card card">
+      <div class="panel-head compact-head">
+        <div><span class="section-tag">Central de ajuda</span><h2>Dúvidas do candidato</h2><p>Passo a passo rápido para usar o site. Se ainda assim não resolver, fale com o suporte.</p></div>
+        <button class="btn btn-secondary" type="button" data-help-close>Fechar</button>
+      </div>
+      <div class="help-faq-list">
+        <details open><summary>Como criar meu acesso?</summary><p>Na própria aba do candidato, preencha nome, e-mail, senha e confirmação de senha. Depois clique em <strong>Criar acesso</strong>.</p></details><details><summary>Como completar meu perfil e currículo?</summary><p>Depois do login, abra <strong>Meu Perfil</strong>, preencha seus dados e clique em <strong>Salvar perfil</strong>. Na aba <strong>Currículo</strong> você acompanha o arquivo informado e seu resumo profissional.</p></details><details><summary>Esqueci minha senha. O que faço?</summary><p>Use o suporte via WhatsApp abaixo e informe seu nome e e-mail de cadastro. O administrador poderá enviar uma redefinição de senha pelo painel administrativo.</p></details><details><summary>Onde vejo entrevistas, testes e status?</summary><p>Após entrar, use o menu lateral da área do candidato. Cada aba mostra somente os dados vinculados ao seu próprio login.</p></details>
+      </div>
+      <div class="form-actions top-gap"><a class="btn btn-primary" href="https://wa.me/5500000000000" target="_blank" rel="noopener">Falar com suporte no WhatsApp</a></div>
+    </div>
+  </div>
+
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Área da Empresa | Banco de Talentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="empresa">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand brand-only-logo" href="index.html" aria-label="Banco de Talentos Conduzir"><img class="brand-logo-img" src="assets/conduzir-logo.png" alt="Logo Conduzir" /></a>
+      <nav class="main-nav"><a href="index.html">Início</a><a href="empresa.html" class="active">Empresa</a><a href="candidato.html">Candidato</a></nav>
+      <button class="menu-toggle" aria-label="Abrir menu">☰</button>
+    </div>
+  </header>
+  <div class="container" id="globalNoticeHost" style="margin-top:16px;"></div>
+
+  <main class="section">
+    <div class="container auth-shell" id="companyAuthShell">
+      <section class="card">
+        <div class="auth-shell-head">
+          <div>
+            <span class="section-tag">Área empresarial com acesso por plano</span>
+            <h1>Empresa</h1>
+            <p class="auth-shell-copy">A empresa cria o próprio acesso com e-mail, usuário e senha. Após o login, contrata o plano mensal para liberar o banco de currículos e pode contratar serviços avulsos que chegam automaticamente para a consultora.</p>
+          </div>
+          <div class="badge">Acesso empresarial • <span data-runtime-mode>Modo local</span></div>
+        </div>
+        <div class="auth-grid">
+          <article class="card nested-card auth-card">
+            <div class="panel-head compact-head"><div><span class="section-tag">Já tenho acesso</span><h2>Login da empresa</h2></div></div>
+            <form class="form-grid" id="companyLoginForm">
+              <label><span>E-mail</span><input type="email" name="email" required placeholder="empresa@email.com" /></label>
+              <label><span>Senha</span><input type="password" name="senha" required placeholder="Sua senha" /></label>
+              <div class="full form-actions"><button class="btn btn-primary" type="submit" id="companyLoginBtn">Entrar</button></div>
+            </form>
+          </article>
+          <article class="card nested-card auth-card">
+            <div class="panel-head compact-head"><div><span class="section-tag">Primeiro acesso</span><h2>Criar conta da empresa</h2></div></div>
+            <form class="form-grid" id="companyRegisterForm">
+              <label><span>Nome da empresa</span><input name="empresa" required placeholder="Nome empresarial" /></label>
+              <label><span>E-mail</span><input type="email" name="email" required placeholder="empresa@email.com" /></label>
+              <label><span>Usuário de acesso</span><input name="login" required placeholder="login.da.empresa" /></label>
+              <label><span>Senha</span><input type="password" name="senha" minlength="6" required placeholder="Mínimo 6 caracteres" /></label>
+              <label><span>Confirmar senha</span><input type="password" name="confirmarSenha" minlength="6" required placeholder="Repita a senha" /></label>
+              <label><span>Telefone</span><input name="telefone" placeholder="(00) 00000-0000" /></label>
+              <label><span>CNPJ</span><input name="cnpj" placeholder="00.000.000/0000-00" /></label>
+              <div class="full form-actions"><button class="btn btn-primary" type="submit" id="companyRegisterBtn">Criar acesso empresarial</button></div>
+            </form>
+          </article>
+        </div>
+        <div id="companyAuthNoticeHost"></div>
+      </section>
+    </div>
+
+    <div class="container dashboard-layout is-hidden" id="companyDashboard">
+      <aside class="sidebar card">
+        <div class="candidate-sidebar-head">
+          <div>
+            <h2>Empresa</h2>
+            <p id="companyLoggedUser" class="sidebar-user-text">Nenhuma empresa logada</p>
+          </div>
+          <button class="btn btn-secondary sidebar-logout-btn" type="button" id="companyLogoutBtn">Sair</button>
+        </div>
+        <div class="vertical-tabs">
+          <button class="tab-btn active" data-tab="planos">Plano e acesso</button>
+          <button class="tab-btn" data-tab="vagas">Minhas Vagas</button>
+          <button class="tab-btn" data-tab="cadastrar-vaga">Cadastrar Vaga</button>
+          <button class="tab-btn" data-tab="candidatos">Banco de Currículos</button>
+          <button class="tab-btn" data-tab="contato">Serviços solicitados/concluídos</button>
+          <button class="tab-btn" data-tab="relatorios">Relatórios</button>
+        </div>
+      </aside>
+      <section class="dashboard-content">
+        <div class="panel card active" id="tab-planos">
+          <div class="panel-head"><div><span class="section-tag">Liberação por plano</span><h1>Plano e acesso da empresa</h1></div><div class="badge"><span id="companyPlanBadge">Sem plano ativo</span></div></div>
+          <div class="cards-grid three" id="companyPlanCards"></div>
+          <div class="card nested-card top-gap">
+            <div class="panel-head compact-head"><div><span class="section-tag">Situação atual</span><h3>Status do contrato</h3></div></div>
+            <div class="cards-grid three">
+              <article class="mini-card"><strong id="companyCurrentPlan">Nenhum</strong><p>Plano atual</p></article>
+              <article class="mini-card"><strong id="companyPaymentStatus">Pendente</strong><p>Status comercial</p></article>
+              <article class="mini-card"><strong id="companyAccessStatus">Bloqueado</strong><p>Acesso ao banco de currículos</p></article>
+            </div>
+            <div class="cards-grid two top-gap" id="companyBillingSettingsCards"></div>
+            <p class="muted-note top-gap" id="companyBillingArchitectureNote">Base pronta para Stripe Billing ou Pagar.me com cobrança recorrente real via backend seguro e webhook.</p>
+            <div id="companyPaymentSessionNotice" class="muted-note top-gap"></div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-vagas">
+          <div class="panel-head"><div><span class="section-tag">Cadastro e login com plano contratado</span><h1>Minhas Vagas</h1></div><div class="badge">Plano empresarial • <span data-runtime-mode>Modo local</span></div></div>
+          <table class="table">
+            <thead><tr><th>Vaga</th><th>Área</th><th>Modelo</th><th>Status</th></tr></thead>
+            <tbody id="jobsTable"><tr><td>Analista de RH</td><td>Recursos Humanos</td><td>Presencial</td><td>Aberta</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="panel card" id="tab-cadastrar-vaga">
+          <div class="panel-head"><div><span class="section-tag">Cadastrar vaga</span><h2>Nova oportunidade</h2></div></div>
+          <form class="form-grid" id="jobForm">
+            <label><span>Título da vaga</span><input name="titulo" required placeholder="Ex.: Analista Administrativo" /></label>
+            <label><span>Área</span><input name="area" required placeholder="Ex.: Administrativo" /></label>
+            <label><span>Região</span><input name="regiao" placeholder="Cidade / Estado" /></label>
+            <label><span>Modelo</span><select name="modelo"><option>Presencial</option><option>Híbrido</option><option>Remoto</option></select></label>
+            <label class="full"><span>Descrição</span><textarea name="descricao" rows="4" placeholder="Descreva a função, responsabilidades e requisitos."></textarea></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Salvar vaga</button></div>
+          </form>
+        </div>
+
+        <div class="panel card" id="tab-candidatos">
+          <div class="panel-head"><div><span class="section-tag">Pesquisa de candidatos por área, perfil ou região</span><h2>Banco de Currículos</h2></div></div>
+          <div id="companyLockedNotice" class="inline-success is-info">Contrate um plano mensal para liberar o acesso ao banco de currículos.</div>
+          <div class="card nested-card">
+            <div class="filter-grid">
+              <label><span>Buscar por nome</span><input type="search" id="companyCandidateSearch" placeholder="Digite nome ou e-mail"></label>
+              <label><span>Área</span><input type="search" id="companyCandidateAreaFilter" placeholder="Ex.: RH"></label>
+              <label><span>Região</span><input type="search" id="companyCandidateRegionFilter" placeholder="Cidade / Estado"></label>
+            </div>
+          </div>
+          <div id="candidateCards" class="cards-grid two"></div>
+        </div>
+
+        <div class="panel card" id="tab-contato">
+          <div class="panel-head"><div><span class="section-tag">Acompanhamento</span><h2>Serviços solicitados e concluídos</h2><p>Os serviços adicionais agora são contratados dentro do currículo específico. Assim a consultora sabe exatamente qual empresa, candidato e serviço estão vinculados.</p></div></div>
+          <div class="inline-success is-info">Abra o Banco de Currículos, escolha um candidato validado e contrate os serviços disponíveis abaixo do perfil.</div>
+          <div id="companyRequestsList" class="stack-list top-gap"></div>
+        </div>
+
+        <div class="panel card" id="tab-relatorios">
+          <div class="panel-head"><div><span class="section-tag">Relatórios</span><h2>Visualização estratégica</h2></div></div>
+          <div class="cards-grid three">
+            <article class="mini-card"><strong>Perfis ativos</strong><p id="metricCandidates">0 candidatos cadastrados localmente.</p></article>
+            <article class="mini-card"><strong>Vagas abertas</strong><p id="metricJobs">0 vagas registradas.</p></article>
+            <article class="mini-card"><strong>Aderência cultural</strong><p>Análise qualitativa conduzida pela consultoria.</p></article>
+          </div>
+          <table class="table top-gap">
+            <thead><tr><th>Indicador</th><th>Leitura</th></tr></thead>
+            <tbody>
+              <tr><td>Candidatos disponíveis para consulta</td><td id="companyReportCandidates">0</td></tr>
+              <tr><td>Vagas abertas cadastradas</td><td id="companyReportJobs">0</td></tr>
+              <tr><td>Solicitações à consultora</td><td id="companyReportRequests">0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+  <button class="help-fab" type="button" id="helpFab" aria-label="Precisa de ajuda? Clique aqui">Precisa de ajuda? Clique aqui</button>
+
+  <div class="help-modal is-hidden" id="helpModal" aria-hidden="true">
+    <div class="help-modal-backdrop" data-help-close></div>
+    <div class="help-modal-card card">
+      <div class="panel-head compact-head">
+        <div><span class="section-tag">Central de ajuda</span><h2>Dúvidas da empresa</h2><p>Passo a passo rápido para usar o site. Se ainda assim não resolver, fale com o suporte.</p></div>
+        <button class="btn btn-secondary" type="button" data-help-close>Fechar</button>
+      </div>
+      <div class="help-faq-list">
+        <details open><summary>Como criar a conta da empresa?</summary><p>Na aba Empresa, preencha nome da empresa, e-mail, login, senha, telefone e CNPJ. Depois clique em <strong>Criar acesso empresarial</strong>.</p></details><details><summary>Como contratar um plano?</summary><p>Depois do login, abra <strong>Plano e acesso</strong> e clique no plano desejado. Nesta versão o fluxo registra a intenção comercial e prepara a liberação. Depois da integração com checkout real e webhook, o status seguirá a cobrança automática.</p></details><details><summary>Como acessar o banco de currículos?</summary><p>Entre com sua conta, ative um plano e depois abra a aba <strong>Banco de Currículos</strong>. Sem plano ativo, o acesso permanece bloqueado.</p></details><details><summary>Esqueci meu login ou senha. O que faço?</summary><p>Entre em contato pelo WhatsApp abaixo informando o nome da empresa e o e-mail cadastrado. O administrador poderá localizar seu cadastro e enviar redefinição de senha.</p></details>
+      </div>
+      <div class="form-actions top-gap"><a class="btn btn-primary" href="https://wa.me/5500000000000" target="_blank" rel="noopener">Falar com suporte no WhatsApp</a></div>
+    </div>
+  </div>
+
+
+  <a class="nr1-floating-whatsapp nr1-floating-whatsapp-disabled" id="nr1FloatingWhatsapp" href="#" target="_blank" rel="noopener" aria-label="Falar no WhatsApp sobre suporte e NR1" title="Configure o WhatsApp suporte/NR1 no painel admin">
+    <img src="assets/logo-botao-nr1.jpeg" alt="Atuação em conformidade com a NR-1" />
+    <span>Suporte/NR1</span>
+  </a>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

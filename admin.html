@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Área Administrativa | Banco de Talentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="admin">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <a class="brand brand-only-logo" href="index.html" aria-label="Banco de Talentos Conduzir"><img class="brand-logo-img" src="assets/conduzir-logo.png" alt="Logo Conduzir" /></a>
+      <nav class="main-nav"><a href="index.html">Site público</a><a href="admin.html" class="active">Administrador</a><a href="consultora.html">Consultora</a></nav>
+      <button class="menu-toggle" aria-label="Abrir menu">☰</button>
+    </div>
+  </header>
+  <div class="container" id="globalNoticeHost" style="margin-top:16px;"></div>
+
+  <main class="section">
+    <div class="container auth-shell" id="systemAuthShell-admin">
+      <section class="card">
+        <div class="auth-shell-head">
+          <div>
+            <span class="section-tag">Acesso criado pelo próprio sistema</span>
+            <h1>Administrador</h1>
+            <p class="auth-shell-copy">O administrador entra apenas com o acesso mestre único do sistema. Esse acesso usa Firebase Authentication, não grava senha em texto no banco e é o único autorizado a abrir a aba administrativa.</p>
+          </div>
+          <div class="badge">Controle total • <span data-runtime-mode>Modo local</span></div>
+        </div>
+        <div id="adminBootstrapArea" class="card nested-card is-hidden">
+          <div class="panel-head compact-head"><div><span class="section-tag">Primeiro acesso</span><h2>Criar administrador mestre único</h2><p>Este será o único usuário autorizado a acessar a aba admin.</p></div></div>
+          <div class="mini-card" style="margin-bottom:16px;">
+            <p><strong>Login fixo:</strong> admin.master</p>
+            <p><strong>E-mail fixo:</strong> admin@conduzirtalentos.com</p>
+            <p><strong>Regra:</strong> somente esse administrador entra na área administrativa. Depois de criado, o painel servirá para gerenciar consultoras, candidatos e empresas.</p>
+          </div>
+          <form id="adminBootstrapForm" class="form-grid">
+            <label><span>Senha do administrador mestre</span><input type="password" name="senha" required placeholder="Defina a senha do administrador" /></label>
+            <label><span>Contato</span><input name="contato" placeholder="Telefone ou e-mail" /></label>
+            <div class="full form-actions"><button class="btn btn-primary" type="submit">Criar administrador mestre</button></div>
+          </form>
+        </div>
+        <form class="form-grid auth-single-form" id="systemLoginForm-admin">
+          <label><span>Login ou e-mail</span><input name="login" required placeholder="admin.master ou admin@conduzirtalentos.com" /></label>
+          <label><span>Senha</span><input type="password" name="senha" required placeholder="Sua senha" /></label>
+          <div class="form-actions"><button class="btn btn-primary" type="submit">Entrar</button></div>
+        </form>
+        <div id="systemAuthNoticeHost-admin"></div>
+      </section>
+    </div>
+
+    <div class="container dashboard-layout is-hidden" id="systemDashboard-admin">
+      <aside class="sidebar card">
+        <div class="candidate-sidebar-head">
+          <div>
+            <h2>Administrador</h2>
+            <p id="systemLoggedUser-admin" class="sidebar-user-text">Nenhum administrador logado</p>
+          </div>
+          <button class="btn btn-secondary sidebar-logout-btn" type="button" id="systemLogoutBtn-admin">Sair</button>
+        </div>
+        <div class="vertical-tabs">
+          <button class="tab-btn active" data-tab="painel">Painel Geral</button>
+          <button class="tab-btn" data-tab="perfis">Gestão de Usuários</button>
+          <button class="tab-btn" data-tab="planos">Planos e Serviços</button>
+          <button class="tab-btn" data-tab="suporte">Editar Suporte / NR1 / Meet</button>
+          <button class="tab-btn" data-tab="curriculos-home">Escolher currículos mostrados na página inicial</button>
+          <button class="tab-btn" data-tab="comunicacao">Comunicação Interna</button>
+          <button class="tab-btn" data-tab="relatorios">Relatórios Estratégicos</button>
+          <button class="tab-btn" data-tab="config">Configurações Avançadas</button>
+        </div>
+      </aside>
+      <section class="dashboard-content">
+        <div class="panel card active" id="tab-painel">
+          <div class="panel-head"><div><span class="section-tag">Acesso total</span><h1>Painel Geral</h1></div><div class="badge">Gestão completa • <span data-runtime-mode>Modo local</span></div></div>
+          <div class="cards-grid stats-grid">
+            <article class="mini-card"><strong id="adminCandidateCount">0</strong><p>Candidatos</p></article>
+            <article class="mini-card"><strong id="adminUserCount">0</strong><p>Usuários do sistema</p></article>
+            <article class="mini-card"><strong id="adminCompanyCount">0</strong><p>Empresas</p></article>
+            <article class="mini-card"><strong id="adminJobCount">0</strong><p>Vagas</p></article>
+            <article class="mini-card"><strong id="adminFeedbackCount">0</strong><p>Pareceres</p></article>
+            <article class="mini-card"><strong id="adminValidatedCount">0</strong><p>Candidatos validados</p></article>
+            <article class="mini-card"><strong id="adminActiveCompaniesCount">0</strong><p>Empresas ativas</p></article>
+            <article class="mini-card"><strong id="adminConversionRate">0%</strong><p>Taxa de validação</p></article>
+          </div>
+          <div class="card nested-card">
+            <div class="panel-head compact-head">
+              <div><span class="section-tag">Resumo rápido</span><h2>Usuários cadastrados no sistema</h2></div>
+              <div class="badge"><span id="adminUsersBadgeCount">0</span> usuário(s)</div>
+            </div>
+            <div id="adminUsersPreview" class="cards-grid two"></div>
+          </div>
+          <div class="cards-grid two">
+            <div class="card nested-card">
+              <div class="panel-head compact-head">
+                <div><span class="section-tag">Cadastros recebidos</span><h2>Candidatos cadastrados</h2></div>
+                <div class="badge"><span id="adminCandidatesBadgeCount">0</span> candidato(s)</div>
+              </div>
+              <div id="adminCandidatesList" class="stack-list"></div>
+            </div>
+            <div class="card nested-card">
+              <div class="panel-head compact-head">
+                <div><span class="section-tag">Cadastros recebidos</span><h2>Empresas cadastradas</h2></div>
+                <div class="badge"><span id="adminCompaniesBadgeCount">0</span> empresa(s)</div>
+              </div>
+              <div id="adminCompaniesList" class="stack-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-perfis">
+          <div class="panel-head"><div><span class="section-tag">Gestão de acessos</span><h2>Controle de usuários e contas</h2><p>Crie acessos somente para consultoras e gerencie no mesmo painel os cadastros de consultoras, empresas e candidatos. O admin pode pesquisar por nome ou e-mail, editar dados, bloquear, excluir logicamente criar acessos de consultoras com usuário e senha, sem exigir e-mail no cadastro.</p></div></div>
+          <div id="adminUserNoticeHost"></div>
+          <div class="card nested-card">
+            <div class="panel-head compact-head">
+              <div><span class="section-tag">Cadastro de acesso</span><h3 id="adminUserFormTitle">Adicionar novo usuário</h3></div>
+              <div class="badge">Consultoras por usuário + senha • Admin mestre único</div>
+            </div>
+            <form id="adminUserForm" class="form-grid">
+              <input type="hidden" name="userId" id="adminUserId" />
+              <input type="hidden" name="currentPassword" id="adminUserCurrentPassword" />
+              <label><span>Nome da consultora (opcional)</span><input type="text" name="nome" id="adminUserNome" placeholder="Ex.: Erika Santos" /></label>
+              <label><span>Usuário da consultora</span><input type="text" name="login" id="adminUserLogin" placeholder="Ex.: erika.santos" required autocomplete="username" /></label>
+              <input type="hidden" name="email" id="adminUserEmail" />
+              <label><span>Senha da consultora</span><input type="password" name="senha" id="adminUserSenha" placeholder="Mínimo 6 caracteres" autocomplete="new-password" /></label>
+              <label><span>Perfil</span><select name="perfil" id="adminUserPerfil" required><option value="Consultora">Consultora</option><option value="Administrador" disabled>Administrador mestre único</option></select></label>
+              <label><span>Status</span><select name="status" id="adminUserStatus" required><option value="Ativo">Ativo</option><option value="Bloqueado">Bloqueado</option><option value="Em análise">Em análise</option></select></label>
+              <label><span>Telefone ou contato</span><input type="text" name="contato" id="adminUserContato" placeholder="Ex.: (64) 99999-9999" /></label>
+              <label class="full"><span>Observações internas</span><textarea name="observacoes" id="adminUserObservacoes" rows="4" placeholder="Anotações internas sobre o acesso, setor ou situação do usuário."></textarea></label>
+              <div class="form-actions full"><button type="submit" class="btn btn-primary" id="adminUserSubmitBtn">Salvar usuário</button><button type="button" class="btn btn-secondary" id="adminUserCancelEditBtn">Limpar / cancelar edição</button></div>
+            </form>
+          </div>
+          <div class="card nested-card">
+            <div class="panel-head compact-head admin-toolbar">
+              <div><span class="section-tag">Gestão de usuários</span><h3>Pesquisar e filtrar cadastros</h3></div>
+              <label class="toolbar-search"><span>Buscar</span><input type="search" id="adminManagementSearch" placeholder="Nome, e-mail, login, empresa ou CNPJ" /></label>
+            </div>
+            <div class="admin-segmented-controls">
+              <button type="button" class="filter-chip active" data-management-scope="consultoras">Consultoras</button>
+              <button type="button" class="filter-chip" data-management-scope="empresas">Empresas</button>
+              <button type="button" class="filter-chip" data-management-scope="candidatos">Candidatos</button>
+            </div>
+            <div class="inline-success is-info admin-inline-note">A consultora entra com usuário e senha. O sistema gera um e-mail técnico interno apenas para o Firebase Auth; ele não aparece para a consultora.</div>
+            <div id="adminManagedAccountsList" class="stack-list"></div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-planos">
+          <div class="panel-head"><div><span class="section-tag">Planos, serviços e billing</span><h2>Planos e Serviços</h2><p>O administrador pode cadastrar, editar, ativar, inativar e excluir planos e serviços. Essa estrutura já alimenta automaticamente a área da empresa e prepara o sistema para Stripe Billing ou Pagar.me com backend seguro na próxima etapa.</p></div></div>
+          <div id="adminCatalogNoticeHost"></div>
+          <div class="cards-grid three" id="adminBillingArchitectureStatus"></div>
+          <div class="cards-grid two top-gap">
+            <div class="card nested-card">
+              <div class="panel-head compact-head">
+                <div><span class="section-tag">Gateway e assinatura</span><h3>Configuração profissional de cobrança</h3></div>
+                <div class="badge">Checkout + webhook</div>
+              </div>
+              <form id="adminBillingSettingsForm" class="form-grid">
+                <label><span>Gateway principal</span><select name="provider"><option value="stripe">Stripe Billing</option><option value="pagarme">Pagar.me</option></select></label>
+                <label><span>Modo do checkout</span><select name="checkoutMode"><option value="request_only">Somente registrar intenção</option><option value="hosted_api">Endpoint seguro hospedado</option></select></label>
+                <label><span>URL base pública</span><input type="url" name="publicBaseUrl" placeholder="Ex.: https://seudominio.com" /></label>
+                <label><span>Endpoint criar checkout</span><input type="url" name="createCheckoutEndpoint" placeholder="Ex.: https://seudominio.com/.netlify/functions/create-stripe-checkout" /></label>
+                <label><span>Webhook esperado</span><input type="url" name="webhookEndpoint" placeholder="Ex.: https://seudominio.com/.netlify/functions/stripe-webhook" /></label>
+                <label><span>URL de sucesso</span><input type="url" name="successUrl" placeholder="Ex.: https://seudominio.com/empresa.html?checkout=sucesso" /></label>
+                <label><span>URL de cancelamento</span><input type="url" name="cancelUrl" placeholder="Ex.: https://seudominio.com/empresa.html?checkout=cancelado" /></label>
+                <label><span>Moeda padrão</span><select name="defaultCurrency"><option value="brl">BRL</option><option value="usd">USD</option></select></label>
+                <label><span>Dias de teste grátis</span><input type="number" name="trialDays" min="0" step="1" value="0" /></label>
+                <label><span>Status</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
+                <label class="full"><span>Observação interna</span><textarea name="notes" rows="3" placeholder="Ex.: Stripe pronto para assinatura mensal com webhook de inadimplência."></textarea></label>
+                <div class="form-actions full"><button type="submit" class="btn btn-primary" id="adminBillingSettingsSubmitBtn">Salvar configuração</button></div>
+              </form>
+            </div>
+            <div class="card nested-card">
+              <div class="panel-head compact-head">
+                <div><span class="section-tag">Cadastro dinâmico</span><h3 id="adminCatalogFormTitle">Cadastrar novo item</h3></div>
+                <div class="badge">Reflete em candidato, empresa e serviços no currículo</div>
+              </div>
+              <form id="adminCatalogForm" class="form-grid">
+                <input type="hidden" name="catalogId" id="adminCatalogId" />
+                <label><span>Tipo</span><select name="type" required><option value="plan">Plano</option><option value="service">Serviço adicional</option></select></label>
+                <label><span>Público / uso</span><select name="audience" required><option value="company">Empresa</option><option value="candidate">Candidato</option><option value="candidate_service">Serviço no currículo do candidato</option></select></label>
+                <label><span>Título</span><input type="text" name="title" required placeholder="Ex.: Plano Profissional" /></label>
+                <label><span>Código interno</span><input type="text" name="code" placeholder="Ex.: plano-profissional" /></label>
+                <label><span>Valor</span><input type="text" name="price" placeholder="Ex.: 397,00" required /></label>
+                <label><span>Ciclo de cobrança</span><select name="billingCycle"><option value="mensal">Mensal</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option><option value="avulso">Avulso</option></select></label>
+                <label><span>Gateway previsto</span><select name="gateway"><option>Stripe Billing</option><option>Pagar.me</option><option>Mercado Pago</option><option>Faturamento manual</option></select></label>
+                <label><span>Ordem de exibição</span><input type="number" name="sortOrder" min="0" value="0" /></label>
+                <label><span>Status</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
+                <label><span>Destaque visual</span><select name="featured"><option value="false">Normal</option><option value="true">Destacado</option></select></label>
+                <label class="full"><span>Descrição curta</span><input type="text" name="shortDescription" placeholder="Texto curto para card e vitrine" /></label>
+                <label class="full"><span>Descrição completa</span><textarea name="description" rows="4" placeholder="Explique benefícios, alcance e regras do plano ou serviço."></textarea></label>
+                <div class="form-actions full"><button type="submit" class="btn btn-primary" id="adminCatalogSubmitBtn">Salvar item</button><button type="button" class="btn btn-secondary" id="adminCatalogCancelBtn">Limpar / cancelar edição</button></div>
+              </form>
+            </div>
+            <div class="card nested-card">
+              <div class="panel-head compact-head"><div><span class="section-tag">Arquitetura profissional</span><h3>Próxima etapa financeira</h3></div></div>
+              <div class="stack-list">
+                <article class="mini-card"><strong>Stripe Billing / Pagar.me</strong><p>Assinatura automática real exige backend seguro para criar sessão, validar webhook, tratar inadimplência e atualizar o status da empresa sem expor chaves secretas no navegador.</p></article>
+                <article class="mini-card"><strong>Painel pronto para preços</strong><p>Os valores e descrições agora ficam centralizados no admin. Isso evita editar HTML manualmente sempre que mudar plano, preço ou serviço.</p></article>
+                <article class="mini-card"><strong>Próximo encaixe</strong><p>Depois conectamos checkout + webhook para mudar status comercial para ativo, pendente, vencido ou bloqueado automaticamente.</p></article>
+              </div>
+            </div>
+          </div>
+          <div class="cards-grid three top-gap">
+            <div class="card nested-card">
+              <div class="panel-head compact-head"><div><span class="section-tag">Planos publicados</span><h3>Planos empresariais</h3></div></div>
+              <div id="adminCatalogPlansList" class="stack-list"></div>
+            </div>
+            <div class="card nested-card">
+              <div class="panel-head compact-head"><div><span class="section-tag">Planos publicados</span><h3>Planos para candidatos</h3></div></div>
+              <div id="adminCatalogCandidatePlansList" class="stack-list"></div>
+            </div>
+            <div class="card nested-card">
+              <div class="panel-head compact-head"><div><span class="section-tag">Serviços no currículo</span><h3>Serviços adicionais vinculados ao candidato</h3></div></div>
+              <div id="adminCatalogServicesList" class="stack-list"></div>
+            </div>
+          </div>
+          <div class="card nested-card top-gap">
+            <div class="panel-head compact-head"><div><span class="section-tag">Solicitações de checkout</span><h3>Fila comercial de pagamento</h3></div></div>
+            <div id="adminPaymentSessionsList" class="stack-list"></div>
+          </div>
+        </div>
+
+        <div class="panel card" id="tab-suporte">
+          <div class="panel-head">
+            <div>
+              <span class="section-tag">Configurações de atendimento</span>
+              <h2>Editar números de suporte / NR1 / link Google Meet</h2>
+              <p>Centralize aqui os contatos e instruções que aparecem automaticamente para empresa, consultora e candidato.</p>
+            </div>
+            <div class="badge">Salvamento no Firebase</div>
+          </div>
+          <div id="adminSupportSettingsNoticeHost"></div>
+          <div class="cards-grid two">
+            <div class="card nested-card">
+              <div class="panel-head compact-head">
+                <div><span class="section-tag">WhatsApp e NR1</span><h3>Suporte da empresa e botão NR1</h3></div>
+              </div>
+              <form id="adminSupportSettingsForm" class="form-grid">
+                <label><span>E-mail do suporte</span><input type="email" name="supportEmail" placeholder="suporte@seudominio.com" /></label>
+                <label><span>WhatsApp suporte/NR1</span><input type="tel" name="supportNr1Whatsapp" placeholder="Ex.: 64 99999-9999" /></label>
+                <label class="full"><span>Mensagem inicial do WhatsApp NR1</span><input type="text" name="supportNr1Message" placeholder="Ex.: Olá, vim pela área da empresa e gostaria de falar sobre suporte/NR1." /></label>
+                <div class="form-actions full"><button type="submit" class="btn btn-primary" id="adminSupportSettingsSubmitBtn">Salvar suporte / NR1</button></div>
+              </form>
+            </div>
+            <div class="card nested-card">
+              <div class="panel-head compact-head">
+                <div><span class="section-tag">Entrevistas</span><h3>Google Meet padrão da consultora</h3></div>
+              </div>
+              <form id="adminMeetSettingsForm" class="form-grid">
+                <label class="full"><span>Link padrão da entrevista via Google Meet</span><input type="url" name="interviewMeetLink" placeholder="Ex.: https://meet.google.com/xxx-yyyy-zzz" /></label>
+                <label class="full"><span>Mensagem padrão para entrevista online</span><input type="text" name="interviewMeetMessage" placeholder="Ex.: Entrevista via Google Meet: clique no link e entre no horário combinado." /></label>
+                <div class="inline-success is-info full">Esse link fica salvo no painel admin e aparece automaticamente quando a consultora agendar entrevista online.</div>
+                <div class="form-actions full"><button type="submit" class="btn btn-primary" id="adminMeetSettingsSubmitBtn">Salvar link do Google Meet</button></div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="panel card" id="tab-curriculos-home">
+          <div class="panel-head">
+            <div>
+              <span class="section-tag">Página inicial</span>
+              <h2>Escolher currículos mostrados na página inicial</h2>
+              <p>Controle quais candidatos aparecem na vitrine do site principal.</p>
+            </div>
+          </div>
+          <form id="adminHomeFeaturedForm" class="form-grid">
+            <label class="full check-row"><input type="checkbox" id="homeAutoApproved" name="homeAutoApproved" checked> Mostrar automaticamente na página inicial os currículos que a consultora aprovar/validar</label>
+            <div class="full inline-success is-info">Se essa opção estiver desmarcada, somente os candidatos selecionados manualmente abaixo aparecerão na página inicial.</div>
+            <div class="full" id="adminHomeFeaturedCandidatesList"></div>
+            <div class="form-actions full"><button type="submit" class="btn btn-primary">Salvar seleção</button></div>
+          </form>
+        </div>
+
+        <div class="panel card" id="tab-comunicacao">
+          <div class="panel-head">
+            <div>
+              <span class="section-tag">Comunicação interna</span>
+              <h2>Mensagens enviadas pela consultora</h2>
+              <p>As mensagens registradas no painel da consultora aparecem aqui automaticamente para a administração acompanhar alinhamentos, dúvidas e observações operacionais.</p>
+            </div>
+            <div class="badge">Consultora → Administração</div>
+          </div>
+          <div class="inline-success is-info top-gap">
+            Use esta área para acompanhar os recados internos sem misturar com candidatos, empresas ou planos. As mensagens são salvas na mesma base do sistema e ficam visíveis para o admin.
+          </div>
+          <div id="internalNotesList" class="stack-list top-gap"></div>
+        </div>
+
+        <div class="panel card" id="tab-relatorios">
+          <div class="panel-head"><div><span class="section-tag">Relatórios estratégicos</span><h2>Visão consolidada</h2></div></div>
+          <table class="table">
+            <thead><tr><th>Métrica</th><th>Resultado</th></tr></thead>
+            <tbody>
+              <tr><td>Total de candidatos cadastrados</td><td id="reportCandidates">0</td></tr>
+              <tr><td>Total de usuários do sistema</td><td id="reportUsers">0</td></tr>
+              <tr><td>Total de empresas cadastradas</td><td id="reportCompanies">0</td></tr>
+              <tr><td>Total de vagas cadastradas</td><td id="reportJobs">0</td></tr>
+              <tr><td>Total de pareceres lançados</td><td id="reportFeedbacks">0</td></tr>
+              <tr><td>Candidatos validados pela consultora</td><td id="reportValidatedCandidates">0</td></tr>
+              <tr><td>Empresas com plano ativo</td><td id="reportActiveCompanies">0</td></tr>
+              <tr><td>Taxa de validação</td><td id="reportConversionRate">0%</td></tr>
+              <tr><td>Modelo do sistema</td><td>Banco de Talentos com triagem técnica e acompanhamento psicossocial</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel card" id="tab-config">
+          <div class="panel-head"><div><span class="section-tag">Configurações avançadas</span><h2>Parâmetros gerais</h2></div></div>
+          <div class="cards-grid two">
+            <article class="mini-card"><strong>Conteúdo e acessos</strong><p>Área administrativa pronta para controlar usuários internos do sistema.</p></article>
+            <article class="mini-card"><strong>Atualizações do sistema</strong><p>Pagamento real e recuperação de senha podem ser adicionados depois sem quebrar essa base.</p></article>
+          </div>
+          <button class="btn btn-secondary" id="clearLocalData">Limpar dados locais de demonstração</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script src="firebase-config.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
