@@ -6,6 +6,13 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return signedIn() && (
+        request.auth.token.admin == true
+        || request.auth.token.email == "admin@conduzirtalentos.com"
+      );
+    }
+
     function ownsCompany(uid) {
       return signedIn() && request.auth.uid == uid;
     }
@@ -48,26 +55,26 @@ service cloud.firestore {
 
     match /catalog_items/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
 
     match /billing_settings/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow write: if isAdmin();
     }
 
     match /payment_sessions/{id} {
       allow read: if signedIn();
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
     match /payment_history/{id} {
       allow read: if signedIn();
-      allow write: if false;
+      allow write: if isAdmin();
     }
 
     match /asaas_webhook_events/{id} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
 
     match /candidates/{id} {
@@ -84,7 +91,8 @@ service cloud.firestore {
     }
 
     match /system_users/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
 
     match /service_requests/{id} {
@@ -96,7 +104,8 @@ service cloud.firestore {
     }
 
     match /internal_notes/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if isAdmin();
     }
   }
 }
