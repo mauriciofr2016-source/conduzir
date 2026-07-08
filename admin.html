@@ -148,7 +148,7 @@
         </div>
 
         <div class="panel card" id="tab-planos">
-          <div class="panel-head"><div><span class="section-tag">Planos, serviços e billing</span><h2>Planos e Serviços</h2><p>O administrador pode cadastrar, editar, ativar, inativar e excluir planos e serviços. Essa estrutura já alimenta automaticamente a área da empresa e prepara o sistema para Stripe Billing ou Pagar.me com backend seguro na próxima etapa.</p></div></div>
+          <div class="panel-head"><div><span class="section-tag">Planos, serviços e billing</span><h2>Planos e Serviços</h2><p>O administrador pode cadastrar, editar, ativar, inativar e excluir planos e serviços. Essa estrutura já alimenta automaticamente a área da empresa e prepara o sistema para Asaas com backend seguro. Altera&ccedil;&otilde;es de pre&ccedil;o afetam apenas novas assinaturas.</p></div></div>
           <div id="adminCatalogNoticeHost"></div>
           <div class="cards-grid three" id="adminBillingArchitectureStatus"></div>
           <div class="cards-grid two top-gap">
@@ -158,17 +158,17 @@
                 <div class="badge">Checkout + webhook</div>
               </div>
               <form id="adminBillingSettingsForm" class="form-grid">
-                <label><span>Gateway principal</span><select name="provider"><option value="stripe">Stripe Billing</option><option value="pagarme">Pagar.me</option></select></label>
+                <label><span>Gateway principal</span><select name="provider"><option value="asaas">Asaas</option><option value="stripe">Stripe Billing</option><option value="pagarme">Pagar.me</option></select></label>
                 <label><span>Modo do checkout</span><select name="checkoutMode"><option value="request_only">Somente registrar intenção</option><option value="hosted_api">Endpoint seguro hospedado</option></select></label>
                 <label><span>URL base pública</span><input type="url" name="publicBaseUrl" placeholder="Ex.: https://seudominio.com" /></label>
-                <label><span>Endpoint criar checkout</span><input type="url" name="createCheckoutEndpoint" placeholder="Ex.: https://seudominio.com/.netlify/functions/create-stripe-checkout" /></label>
-                <label><span>Webhook esperado</span><input type="url" name="webhookEndpoint" placeholder="Ex.: https://seudominio.com/.netlify/functions/stripe-webhook" /></label>
+                <label><span>Endpoint criar checkout</span><input type="url" name="createCheckoutEndpoint" placeholder="Ex.: https://us-central1-seu-projeto.cloudfunctions.net/createAsaasCheckout" /></label>
+                <label><span>Webhook esperado</span><input type="url" name="webhookEndpoint" placeholder="Ex.: https://us-central1-seu-projeto.cloudfunctions.net/asaasWebhook" /></label>
                 <label><span>URL de sucesso</span><input type="url" name="successUrl" placeholder="Ex.: https://seudominio.com/empresa.html?checkout=sucesso" /></label>
                 <label><span>URL de cancelamento</span><input type="url" name="cancelUrl" placeholder="Ex.: https://seudominio.com/empresa.html?checkout=cancelado" /></label>
                 <label><span>Moeda padrão</span><select name="defaultCurrency"><option value="brl">BRL</option><option value="usd">USD</option></select></label>
                 <label><span>Dias de teste grátis</span><input type="number" name="trialDays" min="0" step="1" value="0" /></label>
                 <label><span>Status</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
-                <label class="full"><span>Observação interna</span><textarea name="notes" rows="3" placeholder="Ex.: Stripe pronto para assinatura mensal com webhook de inadimplência."></textarea></label>
+                <label class="full"><span>Observação interna</span><textarea name="notes" rows="3" placeholder="Ex.: Asaas pronto para assinatura mensal. Altera&ccedil;&otilde;es de pre&ccedil;o afetam apenas novas assinaturas."></textarea></label>
                 <div class="form-actions full"><button type="submit" class="btn btn-primary" id="adminBillingSettingsSubmitBtn">Salvar configuração</button></div>
               </form>
             </div>
@@ -185,7 +185,7 @@
                 <label><span>Código interno</span><input type="text" name="code" placeholder="Ex.: plano-profissional" /></label>
                 <label><span>Valor</span><input type="text" name="price" placeholder="Ex.: 397,00" required /></label>
                 <label><span>Ciclo de cobrança</span><select name="billingCycle"><option value="mensal">Mensal</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option><option value="avulso">Avulso</option></select></label>
-                <label><span>Gateway previsto</span><select name="gateway"><option>Stripe Billing</option><option>Pagar.me</option><option>Mercado Pago</option><option>Faturamento manual</option></select></label>
+                <label><span>Gateway previsto</span><select name="gateway"><option>Asaas</option><option>Stripe Billing</option><option>Pagar.me</option><option>Mercado Pago</option><option>Faturamento manual</option></select></label>
                 <label><span>Ordem de exibição</span><input type="number" name="sortOrder" min="0" value="0" /></label>
                 <label><span>Status</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
                 <label><span>Destaque visual</span><select name="featured"><option value="false">Normal</option><option value="true">Destacado</option></select></label>
@@ -197,8 +197,8 @@
             <div class="card nested-card">
               <div class="panel-head compact-head"><div><span class="section-tag">Arquitetura profissional</span><h3>Próxima etapa financeira</h3></div></div>
               <div class="stack-list">
-                <article class="mini-card"><strong>Stripe Billing / Pagar.me</strong><p>Assinatura automática real exige backend seguro para criar sessão, validar webhook, tratar inadimplência e atualizar o status da empresa sem expor chaves secretas no navegador.</p></article>
-                <article class="mini-card"><strong>Painel pronto para preços</strong><p>Os valores e descrições agora ficam centralizados no admin. Isso evita editar HTML manualmente sempre que mudar plano, preço ou serviço.</p></article>
+                <article class="mini-card"><strong>Asaas</strong><p>Assinatura autom&aacute;tica real exige backend seguro para criar sess&atilde;o, validar webhook, tratar inadimpl&ecirc;ncia e atualizar o status da empresa sem expor chaves secretas no navegador. A API Key do Asaas fica somente no Firebase Functions.</p></article>
+                <article class="mini-card"><strong>Regra de pre&ccedil;o dos planos</strong><p>Altera&ccedil;&otilde;es de pre&ccedil;o afetam apenas novas assinaturas. Assinantes atuais mant&ecirc;m o valor contratado at&eacute; uma a&ccedil;&atilde;o manual espec&iacute;fica de reajuste.</p></article>
                 <article class="mini-card"><strong>Próximo encaixe</strong><p>Depois conectamos checkout + webhook para mudar status comercial para ativo, pendente, vencido ou bloqueado automaticamente.</p></article>
               </div>
             </div>

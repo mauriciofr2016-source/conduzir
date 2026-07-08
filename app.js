@@ -43,6 +43,7 @@ const KEYS = {
   catalogItems: "bt_catalog_items",
   billingSettings: "bt_billing_settings",
   paymentSessions: "bt_payment_sessions",
+  paymentHistory: "bt_payment_history",
   systemSession: "bt_system_session"
 };
 
@@ -57,7 +58,8 @@ const COLLECTIONS = {
   companies: "companies",
   catalogItems: "catalog_items",
   billingSettings: "billing_settings",
-  paymentSessions: "payment_sessions"
+  paymentSessions: "payment_sessions",
+  paymentHistory: "payment_history"
 };
 
 const MASTER_ADMIN = {
@@ -125,7 +127,7 @@ const defaultCatalogItems = [
     description: "Inclui análise inicial do perfil, orientação de melhoria do currículo e encaminhamento para avaliação da consultora quando houver aderência.",
     price: 49.9,
     billingCycle: "avulso",
-    gateway: "Stripe Billing",
+    gateway: "Asaas",
     active: true,
     featured: false,
     sortOrder: 1,
@@ -140,7 +142,7 @@ const defaultCatalogItems = [
     description: "Inclui avaliação profissional, teste DISC, leitura técnica da consultora e parecer orientativo para destacar o candidato no banco.",
     price: 89.9,
     billingCycle: "avulso",
-    gateway: "Stripe Billing",
+    gateway: "Asaas",
     active: true,
     featured: true,
     sortOrder: 2,
@@ -155,7 +157,7 @@ const defaultCatalogItems = [
     description: "Inclui revisão de currículo, DISC profissional, orientação de carreira, parecer técnico e preparação para entrevistas.",
     price: 149.9,
     billingCycle: "avulso",
-    gateway: "Stripe Billing",
+    gateway: "Asaas",
     active: true,
     featured: false,
     sortOrder: 3,
@@ -169,7 +171,7 @@ const defaultCatalogItems = [
     description: "Ideal para empresas que querem começar com divulgação de vagas, organização do acesso e acompanhamento comercial enxuto.",
     price: 197,
     billingCycle: "mensal",
-    gateway: "Stripe Billing",
+    gateway: "Asaas",
     active: true,
     featured: false,
     sortOrder: 1,
@@ -183,7 +185,7 @@ const defaultCatalogItems = [
     description: "Plano principal para operação recorrente, com consulta ao banco de talentos, relatórios e fluxo preparado para assinatura automática.",
     price: 397,
     billingCycle: "mensal",
-    gateway: "Stripe Billing",
+    gateway: "Asaas",
     active: true,
     featured: true,
     sortOrder: 2,
@@ -197,7 +199,7 @@ const defaultCatalogItems = [
     description: "Voltado para empresas que precisam de maior profundidade operacional, prioridade e gestão mais próxima da consultoria.",
     price: 697,
     billingCycle: "mensal",
-    gateway: "Stripe Billing",
+    gateway: "Asaas",
     active: true,
     featured: false,
     sortOrder: 3,
@@ -249,7 +251,7 @@ const defaultCatalogItems = [
 
 const defaultBillingSettings = [{
   id: "default-billing-settings",
-  provider: "stripe",
+  provider: "asaas",
   checkoutMode: "request_only",
   publicBaseUrl: "",
   createCheckoutEndpoint: "",
@@ -442,11 +444,12 @@ function getBillingCycleLabel(value) {
 }
 
 function getBillingProviderLabel(value) {
-  const normalized = `${value || "stripe"}`.toLowerCase();
+  const normalized = `${value || "asaas"}`.toLowerCase();
+  if (normalized === "asaas") return "Asaas";
   if (normalized === "pagarme") return "Pagar.me";
-  return "Stripe Billing";
+  if (normalized === "stripe") return "Stripe Billing";
+  return value ? `${value}` : "Asaas";
 }
-
 function getCheckoutModeLabel(value) {
   return `${value || "request_only"}` === "hosted_api" ? "Endpoint seguro hospedado" : "Somente registrar intenção";
 }
@@ -457,6 +460,22 @@ function getActiveBillingSettings() {
   return active || source[0] || defaultBillingSettings[0];
 }
 
+
+function getContractedPlanPrice(profile = {}) {
+  const raw = profile.contractedPlanPrice ?? profile.planPrice ?? profile.planPriceContracted;
+  const amount = Number(raw);
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
+
+function makeContractedPlanSnapshot(plan = {}) {
+  const price = Number(plan.price || 0);
+  return {
+    planCode: plan.code || slugifyCatalogValue(plan.title),
+    planName: plan.title || "Plano empresarial",
+    contractedPlanPrice: Number.isFinite(price) ? price : 0,
+    billingCycle: plan.billingCycle || "mensal"
+  };
+}
 
 function normalizeWhatsappNumber(value) {
   let digits = `${value || ""}`.replace(/\D/g, "");
@@ -868,9 +887,12 @@ function syncCompanyPlanUi() {
   const plan = profile.planName || "Nenhum";
   const payment = profile.paymentStatus || "Pendente";
   const access = companyHasActivePlan() ? "Liberado" : "Bloqueado";
+  const contractedPrice = getContractedPlanPrice(profile);
   document.getElementById("companyCurrentPlan") && (document.getElementById("companyCurrentPlan").textContent = plan);
   document.getElementById("companyPaymentStatus") && (document.getElementById("companyPaymentStatus").textContent = payment);
   document.getElementById("companyAccessStatus") && (document.getElementById("companyAccessStatus").textContent = access);
+  document.getElementById("companyContractedPlanPrice") && (document.getElementById("companyContractedPlanPrice").textContent = contractedPrice ? formatCurrencyBRL(contractedPrice) : "Nenhum");
+  document.getElementById("companyContractedPlanMeta") && (document.getElementById("companyContractedPlanMeta").textContent = profile.contractedAt ? `Contratado em ${formatCreatedAt(profile.contractedAt)} - ${getBillingCycleLabel(profile.billingCycle)}` : "Valor travado no momento da assinatura");
   document.getElementById("companyPlanBadge") && (document.getElementById("companyPlanBadge").textContent = companyHasActivePlan() ? `${plan} ativo` : "Sem plano ativo");
   const lock = document.getElementById("companyLockedNotice");
   if (lock) lock.classList.toggle("is-hidden", companyHasActivePlan());
@@ -1135,7 +1157,7 @@ function setFormValueIfExists(form, selector, value) {
 function fillAdminBillingSettingsForm(settings) {
   const form = document.getElementById("adminBillingSettingsForm");
   if (!form || !settings) return;
-  setFormValueIfExists(form, '[name="provider"]', settings.provider || "stripe");
+  setFormValueIfExists(form, '[name="provider"]', settings.provider || "asaas");
   setFormValueIfExists(form, '[name="checkoutMode"]', settings.checkoutMode || "request_only");
   setFormValueIfExists(form, '[name="publicBaseUrl"]', settings.publicBaseUrl || "");
   setFormValueIfExists(form, '[name="createCheckoutEndpoint"]', settings.createCheckoutEndpoint || "");
@@ -1211,8 +1233,8 @@ function renderPaymentSessions(items) {
       <article class="mini-card">
         <strong>${escapeHtml(item.companyName || item.contactEmail || "Empresa")}</strong>
         <p><strong>Plano:</strong> ${escapeHtml(item.planName || "—")} • <strong>Gateway:</strong> ${escapeHtml(getBillingProviderLabel(item.provider || getActiveBillingSettings().provider))}</p>
-        <p><strong>Status:</strong> ${escapeHtml(item.status || "Aguardando checkout")} • <strong>Valor:</strong> ${formatCurrencyBRL(item.planPrice || 0)}</p>
-        <p class="muted-note">Criado em ${escapeHtml(formatCreatedAt(item.createdAt))}${item.sessionUrl ? ` • <a href="${escapeHtml(item.sessionUrl)}" target="_blank" rel="noopener">Abrir checkout</a>` : ""}</p>
+        <p><strong>Status:</strong> ${escapeHtml(item.status || "Aguardando checkout")} • <strong>Valor contratado:</strong> ${formatCurrencyBRL(item.contractedPlanPrice ?? item.planPrice ?? 0)}</p>
+        <p class="muted-note">Criado em ${escapeHtml(formatCreatedAt(item.createdAt))}${item.asaasSubscriptionId ? ` • Assinatura Asaas: ${escapeHtml(item.asaasSubscriptionId)}` : ""}${item.sessionUrl ? ` • <a href="${escapeHtml(item.sessionUrl)}" target="_blank" rel="noopener">Abrir checkout</a>` : ""}</p>
       </article>
     `).join("") : '<article class="mini-card"><strong>Nenhuma solicitação de checkout</strong><p>Quando uma empresa clicar para contratar um plano, a intenção financeira aparecerá aqui.</p></article>';
   }
@@ -1339,8 +1361,8 @@ function renderCompanyCatalogSections() {
 
   if (architectureNote) {
     architectureNote.textContent = billing.checkoutMode === "hosted_api" && billing.createCheckoutEndpoint
-      ? `Checkout profissional configurado via ${getBillingProviderLabel(billing.provider)}. Ao contratar, o sistema tenta abrir o endpoint seguro definido pelo admin.`
-      : `O clique registra a intenção comercial com ${getBillingProviderLabel(billing.provider)}. Para cobrança recorrente real, publique o endpoint seguro e o webhook.`;
+      ? `Checkout profissional configurado via ${getBillingProviderLabel(billing.provider)}. O valor do catalogo e usado somente para novas assinaturas e fica travado no contrato criado.`
+      : `O clique registra a intencao comercial com ${getBillingProviderLabel(billing.provider)}. Alteracoes de preco afetam apenas novas assinaturas.`;
   }
   updateNr1FloatingWhatsappButton();
   renderPaymentSessions(state.paymentSessions || []);
@@ -1376,7 +1398,7 @@ function fillAdminCatalogForm(item) {
   form.querySelector('[name="code"]').value = item.code || "";
   form.querySelector('[name="price"]').value = Number(item.price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   form.querySelector('[name="billingCycle"]').value = item.billingCycle || "mensal";
-  form.querySelector('[name="gateway"]').value = item.gateway || "Stripe Billing";
+  form.querySelector('[name="gateway"]').value = item.gateway || "Asaas";
   form.querySelector('[name="sortOrder"]').value = item.sortOrder || 0;
   form.querySelector('[name="shortDescription"]').value = item.shortDescription || "";
   form.querySelector('[name="description"]').value = item.description || "";
@@ -1404,7 +1426,7 @@ async function saveCatalogItemRecord(payload) {
     description: `${payload.description || ""}`.trim(),
     price: normalizePriceInput(payload.price),
     billingCycle: `${payload.billingCycle || (payload.type === "service" ? "avulso" : "mensal")}`.trim().toLowerCase(),
-    gateway: `${payload.gateway || "Stripe Billing"}`.trim(),
+    gateway: `${payload.gateway || "Asaas"}`.trim(),
     sortOrder: Number(payload.sortOrder || 0),
     active: `${payload.active}` !== "false",
     featured: `${payload.featured}` === "true"
@@ -1505,7 +1527,7 @@ function initAdminCatalogManagement() {
 
 async function saveBillingSettingsRecord(payload) {
   const data = {
-    provider: `${payload.provider || "stripe"}`.trim().toLowerCase(),
+    provider: `${payload.provider || "asaas"}`.trim().toLowerCase(),
     checkoutMode: `${payload.checkoutMode || "request_only"}`.trim(),
     publicBaseUrl: `${payload.publicBaseUrl || ""}`.trim(),
     createCheckoutEndpoint: `${payload.createCheckoutEndpoint || ""}`.trim(),
@@ -1562,25 +1584,49 @@ async function createPaymentSessionRecord(payload) {
   await saveRecord("paymentSessions", payload);
 }
 
+async function createPaymentHistoryRecord(payload) {
+  await saveRecord("paymentHistory", {
+    ...payload,
+    amount: payload.contractedPlanPrice ?? payload.amount ?? payload.planPrice ?? 0,
+    paidAmount: payload.paidAmount ?? 0
+  });
+}
+
 async function startProfessionalCheckout(plan) {
   const billing = getActiveBillingSettings();
   const company = state.currentCompanyProfile || {};
   const currentUser = state.currentCompanyUser || {};
+  const contractedPlan = makeContractedPlanSnapshot(plan);
+  const contractedAt = new Date().toISOString();
   const sessionPayload = {
     companyUid: getCurrentCompanyUid(),
     companyName: company.empresa || currentUser.displayName || "Empresa",
     contactEmail: currentUser.email || company.email || "",
-    planName: plan.title || "Plano empresarial",
-    planCode: plan.code || slugifyCatalogValue(plan.title),
-    planPrice: Number(plan.price || 0),
-    billingCycle: plan.billingCycle || "mensal",
+    planName: contractedPlan.planName,
+    planCode: contractedPlan.planCode,
+    planPrice: contractedPlan.contractedPlanPrice,
+    contractedPlanPrice: contractedPlan.contractedPlanPrice,
+    contractedAt,
+    billingCycle: contractedPlan.billingCycle,
     currency: billing.defaultCurrency || "brl",
-    provider: billing.provider || "stripe",
+    provider: billing.provider || "asaas",
     status: billing.checkoutMode === "hosted_api" ? "Checkout iniciado" : "Aguardando checkout",
     successUrl: billing.successUrl || "",
     cancelUrl: billing.cancelUrl || "",
     requestMode: billing.checkoutMode || "request_only"
   };
+  const companyContract = (asaasSubscriptionId = company.asaasSubscriptionId || "") => ({
+    ...company,
+    planName: sessionPayload.planName,
+    planCode: sessionPayload.planCode,
+    contractedPlanPrice: sessionPayload.contractedPlanPrice,
+    contractedAt: sessionPayload.contractedAt,
+    billingCycle: sessionPayload.billingCycle,
+    asaasSubscriptionId,
+    paymentStatus: "Pendente",
+    status: "Pendente",
+    planActive: false
+  });
 
   if (billing.checkoutMode === "hosted_api" && billing.createCheckoutEndpoint) {
     try {
@@ -1589,7 +1635,7 @@ async function startProfessionalCheckout(plan) {
         try {
           secureHeaders.Authorization = `Bearer ${await state.auth.currentUser.getIdToken()}`;
         } catch (tokenError) {
-          console.warn("Não foi possível gerar token seguro para checkout:", tokenError);
+          console.warn("Nao foi possivel gerar token seguro para checkout:", tokenError);
         }
       }
       const response = await fetch(billing.createCheckoutEndpoint, {
@@ -1601,9 +1647,11 @@ async function startProfessionalCheckout(plan) {
       if (!response.ok) throw new Error(data?.message || "CHECKOUT_ENDPOINT_FAILED");
       if (data?.url) sessionPayload.sessionUrl = data.url;
       if (data?.sessionId) sessionPayload.gatewaySessionId = data.sessionId;
+      sessionPayload.asaasSubscriptionId = data?.asaasSubscriptionId || data?.subscriptionId || "";
       sessionPayload.status = data?.status || sessionPayload.status;
       await createPaymentSessionRecord(sessionPayload);
-      await persistCompanyProfile({ ...company, planName: sessionPayload.planName, planCode: sessionPayload.planCode, paymentStatus: "Pendente", status: "Pendente", planActive: false });
+      await createPaymentHistoryRecord({ ...sessionPayload, status: sessionPayload.status });
+      await persistCompanyProfile(companyContract(sessionPayload.asaasSubscriptionId || company.asaasSubscriptionId || ""));
       if (data?.url) {
         window.location.href = data.url;
         return { redirected: true };
@@ -1614,16 +1662,17 @@ async function startProfessionalCheckout(plan) {
       sessionPayload.status = "Falha ao iniciar checkout";
       sessionPayload.errorMessage = error.message || "CHECKOUT_ENDPOINT_FAILED";
       await createPaymentSessionRecord(sessionPayload);
-      await persistCompanyProfile({ ...company, planName: sessionPayload.planName, planCode: sessionPayload.planCode, paymentStatus: "Pendente", status: "Pendente", planActive: false });
+      await createPaymentHistoryRecord({ ...sessionPayload, status: sessionPayload.status });
+      await persistCompanyProfile(companyContract());
       throw error;
     }
   }
 
   await createPaymentSessionRecord(sessionPayload);
-  await persistCompanyProfile({ ...company, planName: sessionPayload.planName, planCode: sessionPayload.planCode, paymentStatus: "Pendente", status: "Pendente", planActive: false });
+  await createPaymentHistoryRecord({ ...sessionPayload, status: sessionPayload.status });
+  await persistCompanyProfile(companyContract());
   return { redirected: false, sessionPayload };
 }
-
 function showAdminSupportSettingsNotice(message, type = "success") {
   const host = document.getElementById("adminSupportSettingsNoticeHost") || document.getElementById("adminCatalogNoticeHost");
   if (!host) return;
@@ -2521,6 +2570,7 @@ function renderAdminRegistrations() {
         <p><strong>Telefone:</strong> ${escapeHtml(item.telefone || "Não informado")}</p>
         <p><strong>CNPJ:</strong> ${escapeHtml(item.cnpj || "Não informado")}</p>
         <p><strong>Plano:</strong> ${escapeHtml(item.planName || "Nenhum")}</p>
+        <p><strong>Valor contratado:</strong> ${getContractedPlanPrice(item) ? formatCurrencyBRL(getContractedPlanPrice(item)) : "Nenhum"}</p>
       </div>
       <p><strong>Acesso:</strong> ${escapeHtml(item.planActive || item.paymentStatus === "Ativo" ? "Liberado" : "Bloqueado")}</p>
       <p><strong>Cadastrado em:</strong> ${formatCreatedAt(item.createdAt)}</p>
@@ -2598,6 +2648,7 @@ function renderAdminManagedAccounts() {
             <span class="record-type-badge">Empresa</span>
             <strong>${escapeHtml(getAdminCompanyDisplayName(item))}</strong>
             <p><strong>Status:</strong> ${escapeHtml(normalizeStatusValue(item.status || "Pendente"))} • <strong>Plano:</strong> ${escapeHtml(item.planName || "Nenhum")}</p>
+            <p><strong>Valor contratado:</strong> ${getContractedPlanPrice(item) ? formatCurrencyBRL(getContractedPlanPrice(item)) : "Nenhum"}${item.contractedAt ? ` • Contratado em ${escapeHtml(formatCreatedAt(item.contractedAt))}` : ""}</p>
           </div>
           <span class="badge ${getStatusBadgeClass(item.status || "Pendente")}">${escapeHtml(normalizeStatusValue(item.status || "Pendente"))}</span>
         </div>
@@ -2917,6 +2968,11 @@ async function updateCompanyRecord(userId, data) {
     telefone: `${data.telefone || current.telefone || ""}`.trim(),
     cnpj: `${data.cnpj || current.cnpj || ""}`.trim(),
     planName: `${data.planName || current.planName || ""}`.trim(),
+    planCode: `${data.planCode || current.planCode || ""}`.trim(),
+    contractedPlanPrice: data.contractedPlanPrice ?? current.contractedPlanPrice ?? current.planPrice ?? 0,
+    contractedAt: data.contractedAt || current.contractedAt || "",
+    billingCycle: `${data.billingCycle || current.billingCycle || "mensal"}`.trim(),
+    asaasSubscriptionId: `${data.asaasSubscriptionId || current.asaasSubscriptionId || ""}`.trim(),
     paymentStatus: `${data.paymentStatus || current.paymentStatus || "Pendente"}`.trim(),
     planActive: ["ativo", "liberado", "true", "sim"].includes(`${data.planActive ?? current.planActive ?? false}`.toString().trim().toLowerCase()),
     status: normalizeStatusValue(data.status || current.status || "Pendente"),
