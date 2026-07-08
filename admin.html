@@ -161,8 +161,8 @@
                 <label><span>Gateway principal</span><select name="provider"><option value="asaas">Asaas</option><option value="stripe">Stripe Billing</option><option value="pagarme">Pagar.me</option></select></label>
                 <label><span>Modo do checkout</span><select name="checkoutMode"><option value="request_only">Somente registrar intenção</option><option value="hosted_api">Endpoint seguro hospedado</option></select></label>
                 <label><span>URL base pública</span><input type="url" name="publicBaseUrl" placeholder="Ex.: https://seudominio.com" /></label>
-                <label><span>Endpoint criar checkout</span><input type="url" name="createCheckoutEndpoint" placeholder="Ex.: https://us-central1-seu-projeto.cloudfunctions.net/createAsaasCheckout" /></label>
-                <label><span>Webhook esperado</span><input type="url" name="webhookEndpoint" placeholder="Ex.: https://us-central1-seu-projeto.cloudfunctions.net/asaasWebhook" /></label>
+                <label><span>Endpoint criar checkout</span><input type="text" name="createCheckoutEndpoint" placeholder="/api/asaas/checkout" /></label>
+                <label><span>Webhook esperado</span><input type="text" name="webhookEndpoint" placeholder="/api/asaas/webhook" /></label>
                 <label><span>URL de sucesso</span><input type="url" name="successUrl" placeholder="Ex.: https://seudominio.com/empresa.html?checkout=sucesso" /></label>
                 <label><span>URL de cancelamento</span><input type="url" name="cancelUrl" placeholder="Ex.: https://seudominio.com/empresa.html?checkout=cancelado" /></label>
                 <label><span>Moeda padrão</span><select name="defaultCurrency"><option value="brl">BRL</option><option value="usd">USD</option></select></label>
@@ -197,9 +197,9 @@
             <div class="card nested-card">
               <div class="panel-head compact-head"><div><span class="section-tag">Arquitetura profissional</span><h3>Próxima etapa financeira</h3></div></div>
               <div class="stack-list">
-                <article class="mini-card"><strong>Asaas</strong><p>Assinatura autom&aacute;tica real exige backend seguro para criar sess&atilde;o, validar webhook, tratar inadimpl&ecirc;ncia e atualizar o status da empresa sem expor chaves secretas no navegador. A API Key do Asaas fica somente no Firebase Functions.</p></article>
+                <article class="mini-card"><strong>Asaas</strong><p>Integra&ccedil;&atilde;o via Firebase Functions para criar clientes, assinaturas e cobran&ccedil;as, validar webhook, tratar inadimpl&ecirc;ncia e atualizar a empresa. A API Key do Asaas fica somente nas Functions.</p></article>
                 <article class="mini-card"><strong>Regra de pre&ccedil;o dos planos</strong><p>Altera&ccedil;&otilde;es de pre&ccedil;o afetam apenas novas assinaturas. Assinantes atuais mant&ecirc;m o valor contratado at&eacute; uma a&ccedil;&atilde;o manual espec&iacute;fica de reajuste.</p></article>
-                <article class="mini-card"><strong>Próximo encaixe</strong><p>Depois conectamos checkout + webhook para mudar status comercial para ativo, pendente, vencido ou bloqueado automaticamente.</p></article>
+                <article class="mini-card"><strong>Atualiza&ccedil;&atilde;o autom&aacute;tica</strong><p>O webhook muda o status comercial para ativo, pendente, vencido, reembolsado ou chargeback conforme a situa&ccedil;&atilde;o real da cobran&ccedil;a.</p></article>
               </div>
             </div>
           </div>

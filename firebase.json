@@ -1,0 +1,36 @@
+{
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20"
+  },
+  "hosting": {
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      "firestore.rules",
+      "functions/**",
+      "**/.*",
+      "**/node_modules/**",
+      "conduzir.zip"
+    ],
+    "rewrites": [
+      {
+        "source": "/api/asaas/checkout",
+        "function": {
+          "functionId": "createAsaasCheckout",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/asaas/webhook",
+        "function": {
+          "functionId": "asaasWebhook",
+          "region": "southamerica-east1"
+        }
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

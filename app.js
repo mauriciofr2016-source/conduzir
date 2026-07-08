@@ -252,10 +252,10 @@ const defaultCatalogItems = [
 const defaultBillingSettings = [{
   id: "default-billing-settings",
   provider: "asaas",
-  checkoutMode: "request_only",
+  checkoutMode: "hosted_api",
   publicBaseUrl: "",
-  createCheckoutEndpoint: "",
-  webhookEndpoint: "",
+  createCheckoutEndpoint: "/api/asaas/checkout",
+  webhookEndpoint: "/api/asaas/webhook",
   successUrl: "",
   cancelUrl: "",
   supportEmail: "",
@@ -1648,10 +1648,9 @@ async function startProfessionalCheckout(plan) {
       if (data?.url) sessionPayload.sessionUrl = data.url;
       if (data?.sessionId) sessionPayload.gatewaySessionId = data.sessionId;
       sessionPayload.asaasSubscriptionId = data?.asaasSubscriptionId || data?.subscriptionId || "";
+      sessionPayload.asaasPaymentId = data?.asaasPaymentId || "";
       sessionPayload.status = data?.status || sessionPayload.status;
-      await createPaymentSessionRecord(sessionPayload);
-      await createPaymentHistoryRecord({ ...sessionPayload, status: sessionPayload.status });
-      await persistCompanyProfile(companyContract(sessionPayload.asaasSubscriptionId || company.asaasSubscriptionId || ""));
+      await loadCompanyProfileForCurrentUser();
       if (data?.url) {
         window.location.href = data.url;
         return { redirected: true };

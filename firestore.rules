@@ -1,0 +1,102 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsCompany(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function financialFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "planCode",
+        "planName",
+        "contractedPlanPrice",
+        "contractedAt",
+        "billingCycle",
+        "asaasCustomerId",
+        "asaasSubscriptionId",
+        "asaasPaymentId",
+        "paymentStatus",
+        "planActive",
+        "lastPaymentAt",
+        "lastPaymentDueDate",
+        "lastPaymentEvent",
+        "lastPaymentStatus"
+      ]);
+    }
+
+    match /companies/{uid} {
+      allow read: if ownsCompany(uid) || signedIn();
+      allow create: if ownsCompany(uid)
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.planActive == false
+        && request.resource.data.paymentStatus == "Pendente"
+        && request.resource.data.planName == ""
+        && !request.resource.data.keys().hasAny([
+          "contractedPlanPrice",
+          "contractedAt",
+          "asaasCustomerId",
+          "asaasSubscriptionId",
+          "asaasPaymentId"
+        ]);
+      allow update: if ownsCompany(uid) && financialFieldsUnchanged();
+    }
+
+    match /catalog_items/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    match /billing_settings/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    match /payment_sessions/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /payment_history/{id} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /asaas_webhook_events/{id} {
+      allow read, write: if false;
+    }
+
+    match /candidates/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /jobs/{id} {
+      allow read: if true;
+      allow write: if signedIn();
+    }
+
+    match /feedbacks/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /system_users/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /service_requests/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /interviews/{id} {
+      allow read, write: if signedIn();
+    }
+
+    match /internal_notes/{id} {
+      allow read, write: if signedIn();
+    }
+  }
+}
