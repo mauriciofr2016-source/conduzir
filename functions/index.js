@@ -34,6 +34,14 @@ const ALLOWED_ORIGINS = new Set([
   "https://bancotalentoserika.web.app",
   "https://bancotalentoserika.firebaseapp.com"
 ]);
+const DEFAULT_PERMISSIONS = {
+  curriculumAccess: false,
+  selfServiceHiring: false,
+  consultancy: false,
+  managedRecruitment: false,
+  nr1: false,
+  reports: false
+};
 
 function setCors(req, res) {
   const origin = req.get("origin");
@@ -49,11 +57,52 @@ function sendError(res, status, code, message) {
   return res.status(status).json({ error: code, message });
 }
 
+function maskToken(value) {
+  const token = `${value || ""}`;
+  if (!token) return "";
+  if (token.length <= 16) return `${token.slice(0, 4)}...`;
+  return `${token.slice(0, 8)}...${token.slice(-6)}`;
+}
+
+function sanitizedHeaders(req) {
+  const headers = { ...req.headers };
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === "authorization") {
+      const value = `${headers[key] || ""}`;
+      const token = value.replace(/^Bearer\s+/i, "");
+      headers[key] = value ? `Bearer ${maskToken(token)} (len=${token.length})` : "";
+    }
+  }
+  return headers;
+}
+
+function authDebug(req, step, extra = {}) {
+  logger.info("asaasCheckoutDebug", {
+    step,
+    method: req.method,
+    origin: req.get("origin") || "",
+    path: req.path || "",
+    ...extra
+  });
+}
+
 function normalizePlanCode(value) {
   return `${value || ""}`.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-async function findCatalogPlanByCode(code) {
+function normalizePermissions(value = {}) {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_PERMISSIONS).map((key) => [key, value?.[key] === true])
+  );
+}
+
+function getCatalogItemKind(item = {}) {
+  const type = `${item.type || ""}`.trim().toLowerCase();
+  const cycle = normalizeCycle(item.billingCycle);
+  return type === "service" || cycle === "avulso" ? "service" : "subscription";
+}
+
+async function findCatalogItemByCode(code) {
   if (!code) return null;
   const snapshot = await db.collection("catalog_items")
     .where("code", "==", code)
@@ -65,48 +114,120 @@ async function findCatalogPlanByCode(code) {
 async function authenticateCompany(req) {
   const authorization = `${req.get("authorization") || req.get("Authorization") || ""}`;
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  if (!match?.[1]) throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
+  authDebug(req, "auth_header_received", {
+    hasAuthorization: Boolean(authorization),
+    hasBearer: Boolean(match),
+    tokenLength: match?.[1]?.length || 0,
+    authorizationPreview: match?.[1] ? maskToken(match[1]) : ""
+  });
+  if (!authorization) {
+    authDebug(req, "returning_401", { reason: "401_TOKEN_MISSING" });
+    throw Object.assign(new Error("401_TOKEN_MISSING"), { status: 401 });
+  }
+  if (!match?.[1]) {
+    authDebug(req, "returning_401", { reason: "401_TOKEN_INVALID", detail: "missing_bearer" });
+    throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
+  }
   let decoded;
   try {
-    decoded = await getAuth().verifyIdToken(match[1], true);
+    decoded = await getAuth().verifyIdToken(match[1]);
+    authDebug(req, "verify_id_token_success", {
+      uid: decoded.uid || "",
+      email: decoded.email || "",
+      aud: decoded.aud || "",
+      iss: decoded.iss || ""
+    });
   } catch (error) {
     logger.warn("Token Firebase invalido no checkout Asaas", {
       code: error.code,
       message: error.message,
       origin: req.get("origin") || "",
-      hasAuthorizationHeader: Boolean(authorization)
+      hasAuthorizationHeader: Boolean(authorization),
+      hasBearer: Boolean(match),
+      tokenLength: match?.[1]?.length || 0
     });
-    throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
+    authDebug(req, "returning_401", {
+      reason: "401_TOKEN_INVALID",
+      verifyCode: error.code || "",
+      verifyMessage: error.message || ""
+    });
+    throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
   }
-  if (!decoded.uid) throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
+  if (!decoded.uid) {
+    authDebug(req, "returning_401", { reason: "401_USER_NOT_FOUND", detail: "decoded_uid_missing" });
+    throw Object.assign(new Error("401_USER_NOT_FOUND"), { status: 401 });
+  }
   if (decoded.aud && decoded.aud !== PROJECT_ID) {
     logger.warn("Token Firebase de projeto diferente no checkout Asaas", {
       aud: decoded.aud,
       expected: PROJECT_ID,
       uid: decoded.uid
     });
-    throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
+    authDebug(req, "returning_401", {
+      reason: "401_TOKEN_INVALID",
+      detail: "project_mismatch",
+      aud: decoded.aud,
+      expected: PROJECT_ID,
+      uid: decoded.uid
+    });
+    throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
   }
+  try {
+    const userRecord = await getAuth().getUser(decoded.uid);
+    authDebug(req, "auth_user_lookup_success", {
+      uid: userRecord.uid,
+      email: userRecord.email || "",
+      disabled: Boolean(userRecord.disabled)
+    });
+    if (userRecord.disabled) {
+      authDebug(req, "returning_401", { reason: "401_USER_NOT_FOUND", detail: "user_disabled", uid: decoded.uid });
+      throw Object.assign(new Error("401_USER_NOT_FOUND"), { status: 401 });
+    }
+  } catch (error) {
+    if (error.message === "401_USER_NOT_FOUND") throw error;
+    logger.warn("Usuario Firebase Auth nao encontrado no checkout Asaas", {
+      uid: decoded.uid,
+      code: error.code || "",
+      message: error.message || ""
+    });
+    authDebug(req, "returning_401", {
+      reason: "401_USER_NOT_FOUND",
+      uid: decoded.uid,
+      lookupCode: error.code || "",
+      lookupMessage: error.message || ""
+    });
+    throw Object.assign(new Error("401_USER_NOT_FOUND"), { status: 401 });
+  }
+  authDebug(req, "auth_uid_found", { uid: decoded.uid, email: decoded.email || "" });
   return decoded;
 }
 
-async function getCatalogPlan(planCode) {
-  const normalized = normalizePlanCode(planCode);
-  let plan = await findCatalogPlanByCode(normalized);
-  if (!plan) throw Object.assign(new Error("PLAN_NOT_FOUND"), { status: 404 });
-  const audience = `${plan.audience || "company"}`.toLowerCase();
-  if (plan.active === false || plan.type !== "plan" || audience !== "company") {
+async function getCatalogCheckoutItem(itemCode) {
+  const normalized = normalizePlanCode(itemCode);
+  let item = await findCatalogItemByCode(normalized);
+  if (!item) throw Object.assign(new Error("PLAN_NOT_FOUND"), { status: 404 });
+  const audience = `${item.audience || "company"}`.toLowerCase();
+  const type = `${item.type || "plan"}`.toLowerCase();
+  const audienceAllowed = type === "service"
+    ? ["company", "company_service", "candidate_service"].includes(audience)
+    : audience === "company";
+  if (item.active === false || !audienceAllowed || !["plan", "service"].includes(type)) {
     throw Object.assign(new Error("PLAN_UNAVAILABLE"), { status: 409 });
   }
-  const price = Number(plan.price);
+  const price = Number(item.price);
   if (!Number.isFinite(price) || price <= 0) throw Object.assign(new Error("PLAN_PRICE_INVALID"), { status: 409 });
-  return plan;
+  return {
+    ...item,
+    type,
+    audience,
+    permissions: normalizePermissions(item.permissions)
+  };
 }
 
 async function reserveCheckout(companyRef, planCode) {
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(companyRef);
-    if (!snapshot.exists) throw Object.assign(new Error("COMPANY_NOT_FOUND"), { status: 404 });
+    if (!snapshot.exists) throw Object.assign(new Error("401_COMPANY_NOT_FOUND"), { status: 401 });
     const company = snapshot.data();
     const lockAt = company.billingCheckoutLockedAt?.toDate?.();
     if (lockAt && Date.now() - lockAt.getTime() < CHECKOUT_LOCK_MINUTES * 60 * 1000) {
@@ -179,23 +300,48 @@ exports.createAsaasCheckout = onRequest({
   memory: "256MiB"
 }, async (req, res) => {
   setCors(req, res);
-  if (req.method === "OPTIONS") return res.status(204).send("");
+  authDebug(req, "request_received", {
+    headers: sanitizedHeaders(req),
+    bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body) : [],
+    planCodePreview: normalizePlanCode(req.body?.planCode || "")
+  });
+  if (req.method === "OPTIONS") {
+    authDebug(req, "preflight_options_return_204");
+    return res.status(204).send("");
+  }
   if (req.method !== "POST") return sendError(res, 405, "METHOD_NOT_ALLOWED", "Use POST.");
 
   let companyRef;
   try {
     const auth = await authenticateCompany(req);
-    const planCode = normalizePlanCode(req.body?.planCode);
-    if (!planCode) return sendError(res, 400, "PLAN_CODE_REQUIRED", "Informe o plano.");
+    const planCode = normalizePlanCode(req.body?.planCode || req.body?.itemCode || req.body?.serviceCode);
+    if (!planCode) return sendError(res, 400, "PLAN_CODE_REQUIRED", "Informe o plano ou serviÃ§o.");
 
     companyRef = db.collection("companies").doc(auth.uid);
+    authDebug(req, "company_lookup_start", { uid: auth.uid, planCode });
+    const companySnapshot = await companyRef.get();
+    authDebug(req, "company_lookup_result", {
+      uid: auth.uid,
+      companyFound: companySnapshot.exists,
+      planCode
+    });
+    if (!companySnapshot.exists) {
+      authDebug(req, "returning_401", { reason: "401_COMPANY_NOT_FOUND", uid: auth.uid });
+      throw Object.assign(new Error("401_COMPANY_NOT_FOUND"), { status: 401 });
+    }
     await reserveCheckout(companyRef, planCode);
-    const [companySnapshot, plan, billingSnapshot] = await Promise.all([
-      companyRef.get(),
-      getCatalogPlan(planCode),
+    const [item, billingSnapshot] = await Promise.all([
+      getCatalogCheckoutItem(planCode),
       db.collection("billing_settings").doc("main").get()
     ]);
-    if (!companySnapshot.exists) throw Object.assign(new Error("COMPANY_NOT_FOUND"), { status: 404 });
+    const itemKind = getCatalogItemKind(item);
+    authDebug(req, "plan_lookup_result", {
+      uid: auth.uid,
+      planCode,
+      planFound: Boolean(item?.code),
+      itemKind,
+      itemType: item.type || ""
+    });
     const company = { uid: auth.uid, ...companySnapshot.data() };
     const billing = billingSnapshot.exists ? billingSnapshot.data() : {};
     const client = createAsaasClient({
@@ -206,19 +352,27 @@ exports.createAsaasCheckout = onRequest({
     const contractedAt = new Date();
     const trialDays = Math.max(0, Number(billing.trialDays || 0));
     const dueDate = toDateOnly(addDays(contractedAt, trialDays));
-    const cycle = normalizeCycle(plan.billingCycle);
-    const externalReference = makeExternalReference(auth.uid, plan.code);
+    const cycle = normalizeCycle(item.billingCycle);
+    const externalReference = makeExternalReference(auth.uid, `${itemKind}:${item.code}`);
+    const serviceContext = req.body?.serviceContext && typeof req.body.serviceContext === "object"
+      ? {
+        candidateId: `${req.body.serviceContext.candidateId || ""}`.trim(),
+        candidateName: `${req.body.serviceContext.candidateName || ""}`.trim(),
+        candidateEmail: `${req.body.serviceContext.candidateEmail || ""}`.trim(),
+        message: `${req.body.serviceContext.message || ""}`.trim()
+      }
+      : {};
     const commonPayload = {
       customer: customerId,
       billingType: asaasBillingType.value(),
-      value: Number(plan.price),
-      description: `${plan.title} - Conduzir Talentos`.slice(0, 500),
+      value: Number(item.price),
+      description: `${item.title} - Conduzir Talentos`.slice(0, 500),
       externalReference
     };
 
     let subscription = null;
     let payment = null;
-    if (cycle === "avulso") {
+    if (itemKind === "service" || cycle === "avulso") {
       payment = await client.createPayment({ ...commonPayload, dueDate });
     } else {
       subscription = await client.createSubscription({
@@ -232,11 +386,14 @@ exports.createAsaasCheckout = onRequest({
     const sessionRef = db.collection("payment_sessions").doc();
     const historyRef = payment?.id ? db.collection("payment_history").doc(payment.id) : null;
     const contract = {
-      planCode: plan.code,
-      planName: plan.title,
-      contractedPlanPrice: Number(plan.price),
+      planCode: item.code,
+      planName: item.title,
+      contractedPlanPrice: Number(item.price),
       contractedAt: Timestamp.fromDate(contractedAt),
-      billingCycle: plan.billingCycle || "mensal",
+      billingCycle: item.billingCycle || (itemKind === "service" ? "avulso" : "mensal"),
+      itemType: item.type || "plan",
+      itemKind,
+      permissions: item.permissions,
       asaasCustomerId: customerId,
       asaasSubscriptionId: subscription?.id || "",
       asaasPaymentId: payment?.id || "",
@@ -246,17 +403,29 @@ exports.createAsaasCheckout = onRequest({
       updatedAt: FieldValue.serverTimestamp()
     };
     const batch = db.batch();
-    batch.set(companyRef, {
-      ...contract,
-      billingCheckoutLockedAt: FieldValue.delete(),
-      billingCheckoutPlanCode: FieldValue.delete(),
-      billingCheckoutError: FieldValue.delete()
-    }, { merge: true });
+    if (itemKind === "subscription") {
+      batch.set(companyRef, {
+        ...contract,
+        recurringPermissions: item.permissions,
+        billingCheckoutLockedAt: FieldValue.delete(),
+        billingCheckoutPlanCode: FieldValue.delete(),
+        billingCheckoutError: FieldValue.delete()
+      }, { merge: true });
+    } else {
+      batch.set(companyRef, {
+        asaasCustomerId: customerId,
+        billingCheckoutLockedAt: FieldValue.delete(),
+        billingCheckoutPlanCode: FieldValue.delete(),
+        billingCheckoutError: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
     batch.set(sessionRef, {
       companyUid: auth.uid,
       companyName: company.empresa || "Empresa",
       contactEmail: company.email || auth.email || "",
       ...contract,
+      serviceContext,
       provider: "asaas",
       gatewaySessionId: payment?.id || subscription?.id || "",
       status: "Aguardando pagamento",
@@ -266,12 +435,16 @@ exports.createAsaasCheckout = onRequest({
     if (historyRef) {
       batch.set(historyRef, {
         companyUid: auth.uid,
-        planCode: plan.code,
-        planName: plan.title,
-        contractedPlanPrice: Number(plan.price),
-        amount: Number(payment.value ?? plan.price),
+        planCode: item.code,
+        planName: item.title,
+        contractedPlanPrice: Number(item.price),
+        amount: Number(payment.value ?? item.price),
         paidAmount: 0,
-        billingCycle: plan.billingCycle || "mensal",
+        billingCycle: item.billingCycle || (itemKind === "service" ? "avulso" : "mensal"),
+        itemType: item.type || "plan",
+        itemKind,
+        permissions: item.permissions,
+        serviceContext,
         provider: "asaas",
         asaasPaymentId: payment.id,
         asaasSubscriptionId: subscription?.id || payment.subscription || "",
@@ -287,6 +460,8 @@ exports.createAsaasCheckout = onRequest({
       asaasCustomerId: customerId,
       asaasSubscriptionId: subscription?.id || "",
       asaasPaymentId: payment?.id || "",
+      itemKind,
+      itemType: item.type || "plan",
       status: "Aguardando pagamento",
       url: checkoutUrlFrom(payment)
     });
@@ -298,6 +473,12 @@ exports.createAsaasCheckout = onRequest({
     });
     if (companyRef) await releaseCheckout(companyRef, error.message).catch(() => {});
     const status = Number(error.status) || (error.code?.startsWith("auth/") ? 401 : 500);
+    if (status === 401) {
+      authDebug(req, "returning_401", {
+        reason: error.message || "AUTH_UNKNOWN",
+        status
+      });
+    }
     const publicMessages = {
       AUTH_REQUIRED: "Faça login novamente.",
       COMPANY_NOT_FOUND: "Cadastro da empresa não encontrado.",
@@ -305,6 +486,10 @@ exports.createAsaasCheckout = onRequest({
       PLAN_NOT_FOUND: "Plano não encontrado.",
       PLAN_UNAVAILABLE: "Plano indisponível.",
       PLAN_PRICE_INVALID: "Preço do plano inválido.",
+      "401_TOKEN_MISSING": "401_TOKEN_MISSING",
+      "401_TOKEN_INVALID": "401_TOKEN_INVALID",
+      "401_USER_NOT_FOUND": "401_USER_NOT_FOUND",
+      "401_COMPANY_NOT_FOUND": "401_COMPANY_NOT_FOUND",
       CHECKOUT_IN_PROGRESS: "Já existe uma contratação em andamento."
     };
     return sendError(res, status, error.message || "CHECKOUT_FAILED",
@@ -384,34 +569,76 @@ exports.asaasWebhook = onRequest({
     const state = resolveCompanyPaymentState(company, payment);
     const amount = Number(payment.value || 0);
     const paidAmount = state.paid ? Number(payment.value || 0) : 0;
+    const historyRef = db.collection("payment_history").doc(payment.id);
+    const existingHistory = await historyRef.get();
+    const history = existingHistory.exists ? existingHistory.data() : {};
+    const itemKind = history.itemKind || (payment.subscription ? "subscription" : "service");
+    const permissions = normalizePermissions(history.permissions);
     const latestDueDate = `${payment.dueDate || ""}` >= `${company.lastPaymentDueDate || ""}`
       ? `${payment.dueDate || company.lastPaymentDueDate || ""}`
       : `${company.lastPaymentDueDate || ""}`;
-    const historyRef = db.collection("payment_history").doc(payment.id);
     const batch = db.batch();
-    batch.set(companyDoc.ref, {
-      asaasCustomerId: payment.customer || company.asaasCustomerId || "",
-      asaasSubscriptionId: payment.subscription || company.asaasSubscriptionId || "",
-      asaasPaymentId: payment.id,
-      paymentStatus: state.paymentStatus,
-      planActive: state.planActive,
-      status: state.accountStatus,
-      lastPaymentEvent: event.event,
-      lastPaymentStatus: payment.status || "",
-      lastPaymentDueDate: latestDueDate,
-      lastPaymentAt: state.paid && state.changesAccess
-        ? FieldValue.serverTimestamp()
-        : (company.lastPaymentAt || null),
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
+    if (itemKind === "subscription") {
+      batch.set(companyDoc.ref, {
+        asaasCustomerId: payment.customer || company.asaasCustomerId || "",
+        asaasSubscriptionId: payment.subscription || company.asaasSubscriptionId || "",
+        asaasPaymentId: payment.id,
+        paymentStatus: state.paymentStatus,
+        planActive: state.planActive,
+        status: state.accountStatus,
+        recurringPermissions: state.planActive ? permissions : normalizePermissions(),
+        permissions: state.planActive ? permissions : normalizePermissions(),
+        lastPaymentEvent: event.event,
+        lastPaymentStatus: payment.status || "",
+        lastPaymentDueDate: latestDueDate,
+        lastPaymentAt: state.paid && state.changesAccess
+          ? FieldValue.serverTimestamp()
+          : (company.lastPaymentAt || null),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    } else {
+      batch.set(companyDoc.ref, {
+        asaasCustomerId: payment.customer || company.asaasCustomerId || "",
+        lastServicePaymentEvent: event.event,
+        lastServicePaymentStatus: payment.status || "",
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      if (state.paid) {
+        const serviceContext = history.serviceContext || {};
+        const serviceRef = db.collection("service_requests").doc(payment.id);
+        batch.set(serviceRef, {
+          origin: serviceContext.candidateId ? "company_candidate_profile" : "company",
+          companyUid: companyDoc.id,
+          empresa: company.empresa || company.nome || "Empresa",
+          contactEmail: company.email || company.authEmail || "",
+          tipo: history.planName || "ServiÃ§o avulso",
+          serviceCode: history.planCode || "",
+          servicePrice: Number(history.contractedPlanPrice || amount),
+          servicePermissions: permissions,
+          candidateId: serviceContext.candidateId || "",
+          candidateName: serviceContext.candidateName || "",
+          candidateEmail: serviceContext.candidateEmail || "",
+          mensagem: serviceContext.message || `ServiÃ§o avulso confirmado pelo Asaas: ${history.planName || payment.description || ""}`,
+          status: "Pagamento confirmado",
+          deliveryStatus: "Contratado",
+          paymentStatus: state.paymentStatus,
+          asaasPaymentId: payment.id,
+          createdAt: history.createdAt || FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    }
     batch.set(historyRef, {
       companyUid: companyDoc.id,
-      planCode: company.planCode || "",
-      planName: company.planName || "",
-      contractedPlanPrice: Number(company.contractedPlanPrice || amount),
+      planCode: history.planCode || company.planCode || "",
+      planName: history.planName || company.planName || "",
+      contractedPlanPrice: Number(history.contractedPlanPrice || company.contractedPlanPrice || amount),
       amount,
       paidAmount,
-      billingCycle: company.billingCycle || "",
+      billingCycle: history.billingCycle || company.billingCycle || "",
+      itemKind,
+      itemType: history.itemType || (itemKind === "service" ? "service" : "plan"),
+      permissions,
       provider: "asaas",
       asaasPaymentId: payment.id,
       asaasSubscriptionId: payment.subscription || company.asaasSubscriptionId || "",

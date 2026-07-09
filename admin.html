@@ -180,7 +180,7 @@
               <form id="adminCatalogForm" class="form-grid">
                 <input type="hidden" name="catalogId" id="adminCatalogId" />
                 <label><span>Tipo</span><select name="type" required><option value="plan">Plano</option><option value="service">Serviço adicional</option></select></label>
-                <label><span>Público / uso</span><select name="audience" required><option value="company">Empresa</option><option value="candidate">Candidato</option><option value="candidate_service">Serviço no currículo do candidato</option></select></label>
+                <label><span>Público / uso</span><select name="audience" required><option value="company">Empresa</option><option value="company_service">Serviço avulso para empresa</option><option value="candidate">Candidato</option><option value="candidate_service">Serviço no currículo do candidato</option></select></label>
                 <label><span>Título</span><input type="text" name="title" required placeholder="Ex.: Plano Profissional" /></label>
                 <label><span>Código interno</span><input type="text" name="code" placeholder="Ex.: plano-profissional" /></label>
                 <label><span>Valor</span><input type="text" name="price" placeholder="Ex.: 397,00" required /></label>
@@ -190,6 +190,14 @@
                 <label><span>Status</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
                 <label><span>Destaque visual</span><select name="featured"><option value="false">Normal</option><option value="true">Destacado</option></select></label>
                 <label class="full"><span>Descrição curta</span><input type="text" name="shortDescription" placeholder="Texto curto para card e vitrine" /></label>
+                <div class="full check-grid">
+                  <label class="check-row"><input type="checkbox" name="permissions.curriculumAccess" /> Banco de Currículos</label>
+                  <label class="check-row"><input type="checkbox" name="permissions.selfServiceHiring" /> Seleção por conta própria</label>
+                  <label class="check-row"><input type="checkbox" name="permissions.consultancy" /> Consultoria/acompanhamento</label>
+                  <label class="check-row"><input type="checkbox" name="permissions.managedRecruitment" /> Recrutamento gerenciado</label>
+                  <label class="check-row"><input type="checkbox" name="permissions.nr1" /> Diagnóstico NR1</label>
+                  <label class="check-row"><input type="checkbox" name="permissions.reports" /> Relatórios</label>
+                </div>
                 <label class="full"><span>Descrição completa</span><textarea name="description" rows="4" placeholder="Explique benefícios, alcance e regras do plano ou serviço."></textarea></label>
                 <div class="form-actions full"><button type="submit" class="btn btn-primary" id="adminCatalogSubmitBtn">Salvar item</button><button type="button" class="btn btn-secondary" id="adminCatalogCancelBtn">Limpar / cancelar edição</button></div>
               </form>
@@ -213,7 +221,7 @@
               <div id="adminCatalogCandidatePlansList" class="stack-list"></div>
             </div>
             <div class="card nested-card">
-              <div class="panel-head compact-head"><div><span class="section-tag">Serviços no currículo</span><h3>Serviços adicionais vinculados ao candidato</h3></div></div>
+              <div class="panel-head compact-head"><div><span class="section-tag">Serviços avulsos</span><h3>Serviços para empresas e currículos</h3></div></div>
               <div id="adminCatalogServicesList" class="stack-list"></div>
             </div>
           </div>

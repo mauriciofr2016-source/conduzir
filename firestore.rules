@@ -32,7 +32,9 @@ service cloud.firestore {
         "lastPaymentAt",
         "lastPaymentDueDate",
         "lastPaymentEvent",
-        "lastPaymentStatus"
+        "lastPaymentStatus",
+        "permissions",
+        "recurringPermissions"
       ]);
     }
 

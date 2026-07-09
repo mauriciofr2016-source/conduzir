@@ -68,6 +68,30 @@ const MASTER_ADMIN = {
   nome: "Administrador Mestre",
   perfil: "Administrador"
 };
+const PERMISSION_KEYS = [
+  "curriculumAccess",
+  "selfServiceHiring",
+  "consultancy",
+  "managedRecruitment",
+  "nr1",
+  "reports"
+];
+const DEFAULT_PERMISSIONS = Object.freeze({
+  curriculumAccess: false,
+  selfServiceHiring: false,
+  consultancy: false,
+  managedRecruitment: false,
+  nr1: false,
+  reports: false
+});
+const PERMISSION_LABELS = {
+  curriculumAccess: "Banco de CurrÃ­culos",
+  selfServiceHiring: "SeleÃ§Ã£o por conta prÃ³pria",
+  consultancy: "Consultoria/acompanhamento",
+  managedRecruitment: "Recrutamento gerenciado",
+  nr1: "DiagnÃ³stico NR1",
+  reports: "RelatÃ³rios"
+};
 
 function isMasterAdminRecord(user) {
   if (!user) return false;
@@ -129,6 +153,7 @@ const defaultCatalogItems = [
     billingCycle: "avulso",
     gateway: "Asaas",
     active: true,
+    permissions: { curriculumAccess: true, selfServiceHiring: true, consultancy: false, managedRecruitment: false, nr1: false, reports: false },
     featured: false,
     sortOrder: 1,
     createdAt: "Padrão do sistema"
@@ -144,6 +169,7 @@ const defaultCatalogItems = [
     billingCycle: "avulso",
     gateway: "Asaas",
     active: true,
+    permissions: { curriculumAccess: true, selfServiceHiring: true, consultancy: true, managedRecruitment: false, nr1: false, reports: true },
     featured: true,
     sortOrder: 2,
     createdAt: "Padrão do sistema"
@@ -159,6 +185,7 @@ const defaultCatalogItems = [
     billingCycle: "avulso",
     gateway: "Asaas",
     active: true,
+    permissions: { curriculumAccess: true, selfServiceHiring: true, consultancy: true, managedRecruitment: true, nr1: true, reports: true },
     featured: false,
     sortOrder: 3,
     createdAt: "Padrão do sistema"
@@ -208,6 +235,7 @@ const defaultCatalogItems = [
   {
     code: "servico-recrutamento",
     type: "service",
+    audience: "company_service",
     title: "Recrutamento e seleção completo",
     shortDescription: "Condução completa do processo seletivo.",
     description: "Abertura de vaga, triagem, entrevistas e devolutiva consolidada para a empresa.",
@@ -215,6 +243,7 @@ const defaultCatalogItems = [
     billingCycle: "avulso",
     gateway: "Faturamento manual",
     active: true,
+    permissions: { curriculumAccess: false, selfServiceHiring: false, consultancy: false, managedRecruitment: true, nr1: false, reports: true },
     featured: true,
     sortOrder: 4,
     createdAt: "Padrão do sistema"
@@ -222,6 +251,7 @@ const defaultCatalogItems = [
   {
     code: "servico-engenharia-cargo",
     type: "service",
+    audience: "company_service",
     title: "Engenharia de cargo",
     shortDescription: "Estruturação do cargo e responsabilidades.",
     description: "Mapeamento de responsabilidades, perfil ideal, competências e alinhamento com a operação.",
@@ -229,6 +259,7 @@ const defaultCatalogItems = [
     billingCycle: "avulso",
     gateway: "Faturamento manual",
     active: true,
+    permissions: { curriculumAccess: false, selfServiceHiring: false, consultancy: true, managedRecruitment: false, nr1: false, reports: true },
     featured: false,
     sortOrder: 5,
     createdAt: "Padrão do sistema"
@@ -236,6 +267,7 @@ const defaultCatalogItems = [
   {
     code: "servico-nr1",
     type: "service",
+    audience: "company_service",
     title: "Diagnóstico de risco psicossocial NR1",
     shortDescription: "Levantamento técnico e devolutiva consultiva.",
     description: "Avaliação estruturada com foco em risco psicossocial, evidências e orientação para tomada de decisão.",
@@ -243,6 +275,7 @@ const defaultCatalogItems = [
     billingCycle: "avulso",
     gateway: "Faturamento manual",
     active: true,
+    permissions: { curriculumAccess: false, selfServiceHiring: false, consultancy: true, managedRecruitment: false, nr1: true, reports: true },
     featured: false,
     sortOrder: 6,
     createdAt: "Padrão do sistema"
@@ -427,6 +460,33 @@ function getCatalogAudience(item) {
   return "company";
 }
 
+function normalizePermissions(value = {}) {
+  return PERMISSION_KEYS.reduce((acc, key) => {
+    acc[key] = value?.[key] === true;
+    return acc;
+  }, {});
+}
+
+function getCatalogPermissions(item = {}) {
+  return normalizePermissions(item.permissions);
+}
+
+function getCatalogItemKind(item = {}) {
+  return `${item.type || ""}` === "service" || `${item.billingCycle || ""}`.toLowerCase() === "avulso" ? "service" : "subscription";
+}
+
+function permissionSummary(permissions = {}) {
+  const normalized = normalizePermissions(permissions);
+  const labels = PERMISSION_KEYS.filter((key) => normalized[key]).map((key) => PERMISSION_LABELS[key] || key);
+  return labels.length ? labels.join(", ") : "Sem permissÃµes automÃ¡ticas";
+}
+
+function companyHasPermission(key) {
+  const profile = state.currentCompanyProfile || {};
+  const recurring = normalizePermissions(profile.recurringPermissions || profile.permissions || {});
+  return profile.planActive === true && recurring[key] === true;
+}
+
 function getCatalogItemsByAudience(type, audience) {
   return getCatalogItemsByType(type).filter((item) => getCatalogAudience(item) === audience);
 }
@@ -475,15 +535,50 @@ function resolveCheckoutEndpoint(endpoint, settings = getActiveBillingSettings()
   return value;
 }
 
+function maskTokenForLog(value) {
+  const token = `${value || ""}`;
+  if (!token) return "";
+  if (token.length <= 16) return `${token.slice(0, 4)}...`;
+  return `${token.slice(0, 8)}...${token.slice(-6)}`;
+}
+
 async function getAuthenticatedCompanyIdToken() {
-  if (state.mode !== "cloud" || !state.auth) throw new Error("AUTH_REQUIRED");
+  if (state.mode !== "cloud" || !state.auth) {
+    console.info("asaasCheckoutFrontendDebug", {
+      step: "auth_not_ready",
+      mode: state.mode,
+      hasAuth: Boolean(state.auth)
+    });
+    throw new Error("AUTH_REQUIRED");
+  }
   const authUser = await waitForAuthUser();
-  if (!authUser?.uid || typeof authUser.getIdToken !== "function") throw new Error("AUTH_REQUIRED");
+  if (!authUser?.uid || typeof authUser.getIdToken !== "function") {
+    console.info("asaasCheckoutFrontendDebug", {
+      step: "auth_user_missing",
+      currentUserUid: state.auth?.currentUser?.uid || "",
+      currentUserEmail: state.auth?.currentUser?.email || ""
+    });
+    throw new Error("AUTH_REQUIRED");
+  }
   if (state.currentCompanyProfile?.uid && state.currentCompanyProfile.uid !== authUser.uid) {
+    console.info("asaasCheckoutFrontendDebug", {
+      step: "company_auth_mismatch",
+      authUid: authUser.uid,
+      profileUid: state.currentCompanyProfile.uid
+    });
     throw new Error("COMPANY_AUTH_MISMATCH");
   }
   state.currentCompanyUser = authUser;
-  return authUser.getIdToken(true);
+  const token = await authUser.getIdToken(true);
+  console.info("asaasCheckoutFrontendDebug", {
+    step: "token_obtained",
+    authUid: authUser.uid,
+    authEmail: authUser.email || "",
+    tokenObtained: Boolean(token),
+    tokenLength: token?.length || 0,
+    tokenPreview: maskTokenForLog(token)
+  });
+  return token;
 }
 
 function waitForAuthUser(timeoutMs = 8000) {
@@ -927,11 +1022,14 @@ function companyHasActivePlan() {
   const profile = state.currentCompanyProfile || {};
   return profile.planActive === true || profile.paymentStatus === "Ativo";
 }
+function companyHasCurriculumAccess() {
+  return companyHasPermission("curriculumAccess");
+}
 function syncCompanyPlanUi() {
   const profile = state.currentCompanyProfile || {};
   const plan = profile.planName || "Nenhum";
   const payment = profile.paymentStatus || "Pendente";
-  const access = companyHasActivePlan() ? "Liberado" : "Bloqueado";
+  const access = companyHasCurriculumAccess() ? "Liberado" : "Bloqueado";
   const contractedPrice = getContractedPlanPrice(profile);
   document.getElementById("companyCurrentPlan") && (document.getElementById("companyCurrentPlan").textContent = plan);
   document.getElementById("companyPaymentStatus") && (document.getElementById("companyPaymentStatus").textContent = payment);
@@ -940,7 +1038,7 @@ function syncCompanyPlanUi() {
   document.getElementById("companyContractedPlanMeta") && (document.getElementById("companyContractedPlanMeta").textContent = profile.contractedAt ? `Contratado em ${formatCreatedAt(profile.contractedAt)} - ${getBillingCycleLabel(profile.billingCycle)}` : "Valor travado no momento da assinatura");
   document.getElementById("companyPlanBadge") && (document.getElementById("companyPlanBadge").textContent = companyHasActivePlan() ? `${plan} ativo` : "Sem plano ativo");
   const lock = document.getElementById("companyLockedNotice");
-  if (lock) lock.classList.toggle("is-hidden", companyHasActivePlan());
+  if (lock) lock.classList.toggle("is-hidden", companyHasCurriculumAccess());
 }
 function syncCompanyUiState() {
   if (!isCompanyPage()) return;
@@ -1306,11 +1404,12 @@ function renderAdminPlanServiceCatalog() {
   const ordered = [...source].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   const companyPlans = ordered.filter((item) => item.type === "plan" && getCatalogAudience(item) === "company");
   const candidatePlans = ordered.filter((item) => item.type === "plan" && getCatalogAudience(item) === "candidate");
-  const services = ordered.filter((item) => item.type === "service" && getCatalogAudience(item) === "candidate_service");
+  const services = ordered.filter((item) => item.type === "service");
 
   const audienceLabel = (item) => {
     const audience = getCatalogAudience(item);
     if (audience === "candidate") return "Plano candidato";
+    if (audience === "company_service") return "Serviço avulso empresa";
     if (audience === "candidate_service") return "Serviço no currículo";
     return "Plano empresa";
   };
@@ -1330,6 +1429,7 @@ function renderAdminPlanServiceCatalog() {
         <span><strong>Gateway:</strong> ${escapeHtml(item.gateway || "Não definido")}</span>
         <span><strong>Ordem:</strong> ${escapeHtml(item.sortOrder || 0)}</span>
         <span><strong>Status:</strong> ${item.active === false ? "Inativo" : "Ativo"}</span>
+        <span><strong>Permissões:</strong> ${escapeHtml(permissionSummary(item.permissions))}</span>
       </div>
       ${item.description ? `<p class="muted-note top-gap">${escapeHtml(item.description)}</p>` : ""}
       <div class="form-actions top-gap">
@@ -1360,10 +1460,15 @@ function renderAdminPlanServiceCatalog() {
 function renderCompanyCatalogSections() {
   const planHost = document.getElementById("companyPlanCards");
   const serviceSelect = document.getElementById("companyServiceType");
+  const standaloneServiceHost = document.getElementById("companyStandaloneServiceCards");
   const architectureNote = document.getElementById("companyBillingArchitectureNote");
   const billingCards = document.getElementById("companyBillingSettingsCards");
   const plans = getCatalogItemsByAudience("plan", "company").filter((item) => item.code);
   const services = getCatalogItemsByAudience("service", "candidate_service");
+  const standaloneServices = [
+    ...getCatalogItemsByAudience("service", "company_service"),
+    ...getCatalogItemsByAudience("service", "company")
+  ].filter((item, index, source) => item.code && source.findIndex((other) => other.code === item.code) === index);
   const billing = getActiveBillingSettings();
 
   if (planHost) {
@@ -1399,10 +1504,27 @@ function renderCompanyCatalogSections() {
     serviceSelect.innerHTML = companyActionOptions + serviceOptions;
   }
 
+  if (standaloneServiceHost) {
+    standaloneServiceHost.innerHTML = standaloneServices.length ? standaloneServices.map((item) => `
+      <article class="catalog-card ${item.featured ? "is-featured" : ""}">
+        <div class="catalog-card-head">
+          <div>
+            <span class="record-type-badge">${item.featured ? "Mais indicado" : "Servico avulso"}</span>
+            <h3>${escapeHtml(item.title || "Servico")}</h3>
+          </div>
+          <div class="catalog-price">${formatCurrencyBRL(item.price || 0)}<small>pagamento unico</small></div>
+        </div>
+        <p>${escapeHtml(item.shortDescription || item.description || "Servico executado pela consultoria.")}</p>
+        <p class="muted-note top-gap"><strong>Libera:</strong> ${escapeHtml(permissionSummary(item.permissions))}</p>
+        <button class="btn btn-primary top-gap" type="button" data-service-contract="${escapeHtml(item.code || "")}">Contratar Serviço</button>
+      </article>
+    `).join("") : '<article class="mini-card"><strong>Nenhum servico avulso publicado</strong><p>O administrador ainda nao publicou servicos avulsos para empresas.</p></article>';
+  }
+
   if (billingCards) {
     billingCards.innerHTML = `
       <article class="mini-card"><strong>${escapeHtml(getBillingProviderLabel(billing.provider))}</strong><p>Gateway principal configurado pelo admin.</p></article>
-      <article class="mini-card"><strong>${escapeHtml(getCheckoutModeLabel(billing.checkoutMode))}</strong><p>${billing.trialDays ? `Teste grátis de ${escapeHtml(billing.trialDays)} dia(s).` : 'Sem período de teste configurado.'}</p></article>
+      <article class="mini-card"><strong>${escapeHtml(getCheckoutModeLabel(billing.checkoutMode))}</strong><p>${billing.trialDays ? `Teste gratis de ${escapeHtml(billing.trialDays)} dia(s).` : 'Sem periodo de teste configurado.'}</p></article>
     `;
   }
 
@@ -1453,10 +1575,15 @@ function fillAdminCatalogForm(item) {
   form.querySelector('[name="description"]').value = item.description || "";
   form.querySelector('[name="active"]').value = item.active === false ? "false" : "true";
   form.querySelector('[name="featured"]').value = item.featured ? "true" : "false";
+  const permissions = getCatalogPermissions(item);
+  PERMISSION_KEYS.forEach((key) => {
+    const field = form.querySelector(`[name="permissions.${key}"]`);
+    if (field) field.checked = permissions[key] === true;
+  });
   const title = document.getElementById("adminCatalogFormTitle");
   if (title) title.textContent = `Editar: ${item.title || "item"}`;
   const submit = document.getElementById("adminCatalogSubmitBtn");
-  if (submit) submit.textContent = "Salvar alterações";
+  if (submit) submit.textContent = "Salvar alteracoes";
 }
 
 function showAdminCatalogNotice(message, type = "success") {
@@ -1482,7 +1609,10 @@ async function saveCatalogItemRecord(payload) {
     gateway: `${payload.gateway || "Asaas"}`.trim(),
     sortOrder: Number(payload.sortOrder || 0),
     active: normalizedType === "plan" && normalizedAudience === "company" ? true : `${payload.active}` !== "false",
-    featured: `${payload.featured}` === "true"
+    featured: `${payload.featured}` === "true",
+    permissions: normalizePermissions(Object.fromEntries(
+      PERMISSION_KEYS.map((key) => [key, payload[`permissions.${key}`] === "on"])
+    ))
   };
   if (!data.code || !data.title || !Number.isFinite(data.price) || data.price <= 0 || !data.billingCycle) {
     throw new Error("CATALOG_PLAN_REQUIRED_FIELDS");
@@ -1671,11 +1801,12 @@ async function createPaymentHistoryRecord(payload) {
   });
 }
 
-async function startProfessionalCheckout(plan) {
+async function startProfessionalCheckout(plan, options = {}) {
   const billing = getActiveBillingSettings();
   const company = state.currentCompanyProfile || {};
   const currentUser = state.currentCompanyUser || {};
   const contractedPlan = makeContractedPlanSnapshot(plan);
+  const itemKind = getCatalogItemKind(plan);
   const contractedAt = new Date().toISOString();
   const sessionPayload = {
     companyUid: getCurrentCompanyUid(),
@@ -1687,6 +1818,9 @@ async function startProfessionalCheckout(plan) {
     contractedPlanPrice: contractedPlan.contractedPlanPrice,
     contractedAt,
     billingCycle: contractedPlan.billingCycle,
+    itemType: plan.type || "plan",
+    itemKind,
+    permissions: getCatalogPermissions(plan),
     currency: billing.defaultCurrency || "brl",
     provider: billing.provider || "asaas",
     status: billing.checkoutMode === "hosted_api" ? "Pagamento iniciado" : "Aguardando pagamento",
@@ -1694,6 +1828,7 @@ async function startProfessionalCheckout(plan) {
     cancelUrl: billing.cancelUrl || "",
     requestMode: billing.checkoutMode || "request_only"
   };
+  if (options.serviceContext) sessionPayload.serviceContext = options.serviceContext;
   const companyContract = (asaasSubscriptionId = company.asaasSubscriptionId || "") => ({
     ...company,
     planName: sessionPayload.planName,
@@ -1701,6 +1836,8 @@ async function startProfessionalCheckout(plan) {
     contractedPlanPrice: sessionPayload.contractedPlanPrice,
     contractedAt: sessionPayload.contractedAt,
     billingCycle: sessionPayload.billingCycle,
+    recurringPermissions: sessionPayload.permissions,
+    permissions: sessionPayload.permissions,
     asaasSubscriptionId,
     paymentStatus: "Pendente",
     status: "Pendente",
@@ -1715,10 +1852,28 @@ async function startProfessionalCheckout(plan) {
         "Content-Type": "application/json",
         Authorization: `Bearer ${idToken}`
       };
+      console.info("asaasCheckoutFrontendDebug", {
+        step: "before_fetch",
+        endpoint: checkoutEndpoint,
+        authUid: state.auth?.currentUser?.uid || "",
+        authEmail: state.auth?.currentUser?.email || "",
+        stateCompanyUid: state.currentCompanyUser?.uid || "",
+        profileUid: state.currentCompanyProfile?.uid || "",
+        tokenObtained: Boolean(idToken),
+        tokenLength: idToken?.length || 0,
+        headers: {
+          "Content-Type": secureHeaders["Content-Type"],
+          Authorization: idToken ? `Bearer ${maskTokenForLog(idToken)} (len=${idToken.length})` : ""
+        },
+        payload: { planCode: sessionPayload.planCode }
+      });
       const response = await fetch(checkoutEndpoint, {
         method: "POST",
         headers: secureHeaders,
-        body: JSON.stringify({ planCode: sessionPayload.planCode })
+        body: JSON.stringify({
+          planCode: sessionPayload.planCode,
+          serviceContext: options.serviceContext || undefined
+        })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.message || "CHECKOUT_ENDPOINT_FAILED");
@@ -1740,14 +1895,14 @@ async function startProfessionalCheckout(plan) {
       if (state.mode === "cloud") throw error;
       await createPaymentSessionRecord(sessionPayload);
       await createPaymentHistoryRecord({ ...sessionPayload, status: sessionPayload.status });
-      await persistCompanyProfile(companyContract());
+      if (itemKind === "subscription") await persistCompanyProfile(companyContract());
       throw error;
     }
   }
 
   await createPaymentSessionRecord(sessionPayload);
   await createPaymentHistoryRecord({ ...sessionPayload, status: sessionPayload.status });
-  await persistCompanyProfile(companyContract());
+  if (itemKind === "subscription") await persistCompanyProfile(companyContract());
   return { redirected: false, sessionPayload };
 }
 function showAdminSupportSettingsNotice(message, type = "success") {
@@ -2406,7 +2561,7 @@ function renderCandidateLinkedServicesForCompany(candidate) {
 function renderCandidateViews(data) {
   state.candidates = Array.isArray(data) ? data : [];
   const scopedCandidates = getCandidateScopedCandidates(state.candidates);
-  renderCandidateCards(isCompanyPage() && !companyHasActivePlan() ? [] : filterCandidatesForCompany(state.candidates), "candidateCards");
+  renderCandidateCards(isCompanyPage() && !companyHasCurriculumAccess() ? [] : filterCandidatesForCompany(state.candidates), "candidateCards");
   renderCandidateCards(state.candidates, "consultantCandidates");
   renderHomeCandidates(state.candidates);
 
@@ -3540,58 +3695,31 @@ function initJobPage() {
   document.getElementById("candidateCards")?.addEventListener("click", async (event) => {
     const serviceButton = event.target.closest("[data-company-candidate-service]");
     if (serviceButton) {
-      if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faça login para contratar um serviço vinculado ao candidato.", "error");
+      if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faca login para contratar um servico vinculado ao candidato.", "error");
+      const serviceCode = serviceButton.dataset.companyCandidateService || "";
+      const catalogService = getCatalogItemByCode(serviceCode) || getCatalogItemsByType("service").find((item) => item.title === serviceButton.dataset.serviceTitle) || null;
+      if (!catalogService) return showCompanyAuthNotice("Servico nao encontrado para iniciar a contratacao.", "error");
       try {
-        setButtonBusy(serviceButton, "Enviando...", serviceButton.textContent || "Contratar", true);
-        await saveServiceRequest({
-          tipo: serviceButton.dataset.serviceTitle || "Serviço adicional",
-          serviceCode: serviceButton.dataset.companyCandidateService || "",
-          servicePrice: Number(serviceButton.dataset.servicePrice || 0),
-          origin: "company_candidate_profile",
-          status: "Solicitado",
-          deliveryStatus: "Pendente",
-          companyUid: getCurrentCompanyUid(),
-          companyEmail: getCurrentCompanyEmail(),
-          empresa: state.currentCompanyProfile?.empresa || state.currentCompanyUser?.displayName || "",
-          candidateId: serviceButton.dataset.candidateId || "",
-          candidateName: serviceButton.dataset.candidateName || "",
-          candidateEmail: serviceButton.dataset.candidateEmail || "",
-          mensagem: `Serviço contratado dentro do currículo do candidato ${serviceButton.dataset.candidateName || ""}. Toda execução deve passar pela consultora.`
+        setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.textContent || "Contratar", true);
+        const result = await startProfessionalCheckout(catalogService, {
+          serviceContext: {
+            candidateId: serviceButton.dataset.candidateId || "",
+            candidateName: serviceButton.dataset.candidateName || "",
+            candidateEmail: serviceButton.dataset.candidateEmail || "",
+            message: `Servico contratado dentro do curriculo do candidato ${serviceButton.dataset.candidateName || ""}. Toda execucao deve passar pela consultora.`
+          }
         });
         await hydrateInitialData();
-        showCompanyAuthNotice("Serviço vinculado ao candidato e enviado para a consultora.");
-        document.querySelector('[data-tab="contato"]')?.click();
+        if (!result?.redirected) {
+          showCompanyAuthNotice("Pagamento do servico iniciado. A solicitacao sera liberada apos confirmacao do Asaas.");
+          document.querySelector('[data-tab="contato"]')?.click();
+        }
       } catch (error) {
         console.error(error);
-        showCompanyAuthNotice("Não foi possível registrar o serviço agora.", "error");
+        showCompanyAuthNotice("Nao foi possivel iniciar o pagamento do servico agora.", "error");
       } finally {
-        setButtonBusy(serviceButton, "Enviando...", serviceButton.dataset.idleLabel || "Contratar para este candidato", false);
+        setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.dataset.idleLabel || "Contratar para este candidato", false);
       }
-      return;
-    }
-
-    const button = event.target.closest("[data-company-candidate-action]");
-    if (!button) return;
-    if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faça login para solicitar uma ação.", "error");
-    try {
-      await saveServiceRequest({
-        tipo: button.dataset.companyCandidateAction || "Solicitação",
-        origin: "company_candidate_action",
-        status: "Solicitado",
-        deliveryStatus: "Pendente",
-        companyUid: getCurrentCompanyUid(),
-        companyEmail: getCurrentCompanyEmail(),
-        empresa: state.currentCompanyProfile?.empresa || state.currentCompanyUser?.displayName || "",
-        candidateName: button.dataset.candidateName || "",
-        candidateEmail: button.dataset.candidateEmail || "",
-        mensagem: `${button.dataset.companyCandidateAction || "Solicitação"} para o candidato ${button.dataset.candidateName || ""}. Toda comunicação deve passar pela consultora.`
-      });
-      await hydrateInitialData();
-      showCompanyAuthNotice("Solicitação vinculada ao candidato e enviada para a consultora.");
-      document.querySelector('[data-tab="contato"]')?.click();
-    } catch (error) {
-      console.error(error);
-      showCompanyAuthNotice("Não foi possível enviar a solicitação agora.", "error");
     }
   });
   const loginForm = document.getElementById("companyLoginForm");
@@ -3657,6 +3785,35 @@ function initJobPage() {
     }
   });
   document.addEventListener("click", async (event) => {
+    const serviceButton = event.target.closest("[data-service-contract]");
+    if (serviceButton && isCompanyPage()) {
+      if (serviceButton.disabled) return;
+      if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faca login para contratar um servico.", "error");
+      const serviceCode = serviceButton.dataset.serviceContract || "";
+      const catalogService = getCatalogItemByCode(serviceCode) || null;
+      if (!catalogService) return showCompanyAuthNotice("Servico nao encontrado para iniciar a contratacao.", "error");
+      try {
+        setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.textContent || "Contratar Serviço", true);
+        const result = await startProfessionalCheckout(catalogService, {
+          serviceContext: {
+            message: `Servico avulso contratado pela empresa: ${catalogService.title || serviceCode}.`
+          }
+        });
+        await hydrateInitialData();
+        syncCompanyUiState();
+        if (!result?.redirected) {
+          showCompanyAuthNotice("Pagamento do servico iniciado. A solicitacao sera liberada apos confirmacao do Asaas.");
+        }
+      } catch (error) {
+        console.error(error);
+        await hydrateInitialData();
+        syncCompanyUiState();
+        showCompanyAuthNotice("Nao foi possivel iniciar o pagamento do servico agora.", "error");
+      } finally {
+        setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.dataset.idleLabel || "Contratar Serviço", false);
+      }
+      return;
+    }
     const button = event.target.closest("[data-plan-contract]");
     if (!button || !isCompanyPage()) return;
     if (button.disabled) return;
