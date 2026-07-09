@@ -524,11 +524,7 @@ function initNr1FloatingWhatsappButton() {
 }
 
 function getPublicCheckoutLabel() {
-  const settings = getActiveBillingSettings();
-  if (`${settings.checkoutMode || "request_only"}` === "hosted_api" && settings.createCheckoutEndpoint) {
-    return `Checkout profissional via ${getBillingProviderLabel(settings.provider)}`;
-  }
-  return `Solicitação comercial via ${getBillingProviderLabel(settings.provider)}`;
+  return "Contratar plano";
 }
 
 
@@ -1641,7 +1637,7 @@ async function startProfessionalCheckout(plan) {
       const response = await fetch(billing.createCheckoutEndpoint, {
         method: "POST",
         headers: secureHeaders,
-        body: JSON.stringify(sessionPayload)
+        body: JSON.stringify({ planCode: sessionPayload.planCode })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.message || "CHECKOUT_ENDPOINT_FAILED");
@@ -3581,11 +3577,13 @@ function initJobPage() {
   document.addEventListener("click", async (event) => {
     const button = event.target.closest("[data-plan-contract]");
     if (!button || !isCompanyPage()) return;
+    if (button.disabled) return;
     if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faça login para contratar um plano.", "error");
     const code = button.dataset.planContract || "";
     const catalogPlan = getCatalogItemByCode(code) || getCatalogItemsByType("plan").find((item) => item.title === code) || null;
     if (!catalogPlan) return showCompanyAuthNotice("Plano não encontrado para iniciar a contratação.", "error");
     try {
+      setButtonBusy(button, "Preparando pagamento...", button.textContent || "Contratar plano", true);
       const result = await startProfessionalCheckout(catalogPlan);
       await hydrateInitialData();
       syncCompanyUiState();
@@ -3597,6 +3595,8 @@ function initJobPage() {
       await hydrateInitialData();
       syncCompanyUiState();
       showCompanyAuthNotice("Não foi possível abrir o checkout seguro agora. A solicitação foi registrada como pendente para acompanhamento comercial.", "error");
+    } finally {
+      setButtonBusy(button, "Preparando pagamento...", button.dataset.idleLabel || "Contratar plano", false);
     }
   });
   const form = document.getElementById("jobForm");

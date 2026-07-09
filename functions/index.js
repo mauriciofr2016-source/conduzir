@@ -28,6 +28,26 @@ const asaasEnvironment = defineString("ASAAS_ENV", { default: "sandbox" });
 const asaasBillingType = defineString("ASAAS_BILLING_TYPE", { default: "UNDEFINED" });
 const REGION = "southamerica-east1";
 const CHECKOUT_LOCK_MINUTES = 3;
+const DEFAULT_CATALOG_PLANS = [
+  {
+    code: "plano-essencial",
+    title: "Plano Essencial",
+    price: 197,
+    aliases: ["plano-essencial", "essencial", "plano essencial"]
+  },
+  {
+    code: "plano-profissional",
+    title: "Plano Profissional",
+    price: 397,
+    aliases: ["plano-profissional", "profissional", "plano profissional"]
+  },
+  {
+    code: "plano-premium",
+    title: "Plano Premium",
+    price: 697,
+    aliases: ["plano-premium", "premium", "plano premium"]
+  }
+];
 
 function setCors(req, res) {
   const origin = req.get("origin");
@@ -41,6 +61,46 @@ function sendError(res, status, code, message) {
   return res.status(status).json({ error: code, message });
 }
 
+function normalizePlanCode(value) {
+  return `${value || ""}`.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function slugifyPlanCode(value) {
+  return normalizePlanCode(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function findCatalogPlanByCode(code) {
+  if (!code) return null;
+  const snapshot = await db.collection("catalog_items")
+    .where("code", "==", code)
+    .limit(1)
+    .get();
+  return snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+}
+
+function getDefaultCatalogPlan(planCode) {
+  const normalized = normalizePlanCode(planCode);
+  const slug = slugifyPlanCode(planCode);
+  const fallback = DEFAULT_CATALOG_PLANS.find((plan) => (
+    plan.aliases.includes(normalized) || plan.aliases.includes(slug)
+  ));
+  if (!fallback) return null;
+  return {
+    id: `default-${fallback.code}`,
+    code: fallback.code,
+    title: fallback.title,
+    price: fallback.price,
+    billingCycle: "mensal",
+    type: "plan",
+    audience: "company",
+    active: true
+  };
+}
+
 async function authenticateCompany(req) {
   const authorization = `${req.get("authorization") || ""}`;
   if (!authorization.startsWith("Bearer ")) throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
@@ -50,12 +110,12 @@ async function authenticateCompany(req) {
 }
 
 async function getCatalogPlan(planCode) {
-  const snapshot = await db.collection("catalog_items")
-    .where("code", "==", planCode)
-    .limit(1)
-    .get();
-  if (snapshot.empty) throw Object.assign(new Error("PLAN_NOT_FOUND"), { status: 404 });
-  const plan = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+  const normalized = normalizePlanCode(planCode);
+  const slug = slugifyPlanCode(planCode);
+  let plan = await findCatalogPlanByCode(normalized);
+  if (!plan && slug !== normalized) plan = await findCatalogPlanByCode(slug);
+  if (!plan) plan = getDefaultCatalogPlan(normalized);
+  if (!plan) throw Object.assign(new Error("PLAN_NOT_FOUND"), { status: 404 });
   const audience = `${plan.audience || "company"}`.toLowerCase();
   if (plan.active === false || plan.type !== "plan" || audience !== "company") {
     throw Object.assign(new Error("PLAN_UNAVAILABLE"), { status: 409 });
@@ -146,7 +206,7 @@ exports.createAsaasCheckout = onRequest({
   let companyRef;
   try {
     const auth = await authenticateCompany(req);
-    const planCode = `${req.body?.planCode || ""}`.trim();
+    const planCode = normalizePlanCode(req.body?.planCode);
     if (!planCode) return sendError(res, 400, "PLAN_CODE_REQUIRED", "Informe o plano.");
 
     companyRef = db.collection("companies").doc(auth.uid);
