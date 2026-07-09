@@ -56,11 +56,11 @@ firebase deploy --only firestore:rules,functions,hosting
 
 O Hosting publica:
 
-- Checkout: `https://bancotalentoserika.web.app/api/asaas/checkout`
+- Pagamento: `https://bancotalentoserika.web.app/api/asaas/checkout`
 - Webhook: `https://bancotalentoserika.web.app/api/asaas/webhook`
 
 No painel admin, defina o modo como `Endpoint seguro hospedado` e use
-`/api/asaas/checkout` como endpoint de checkout.
+`/api/asaas/checkout` como endpoint de pagamento.
 
 ## 4. Configurar o webhook no Asaas
 

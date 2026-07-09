@@ -28,30 +28,17 @@ const asaasEnvironment = defineString("ASAAS_ENV", { default: "sandbox" });
 const asaasBillingType = defineString("ASAAS_BILLING_TYPE", { default: "UNDEFINED" });
 const REGION = "southamerica-east1";
 const CHECKOUT_LOCK_MINUTES = 3;
-const DEFAULT_CATALOG_PLANS = [
-  {
-    code: "plano-essencial",
-    title: "Plano Essencial",
-    price: 197,
-    aliases: ["plano-essencial", "essencial", "plano essencial"]
-  },
-  {
-    code: "plano-profissional",
-    title: "Plano Profissional",
-    price: 397,
-    aliases: ["plano-profissional", "profissional", "plano profissional"]
-  },
-  {
-    code: "plano-premium",
-    title: "Plano Premium",
-    price: 697,
-    aliases: ["plano-premium", "premium", "plano premium"]
-  }
-];
+const ALLOWED_ORIGINS = new Set([
+  "https://mauriciofr2016-source.github.io",
+  "https://bancotalentoserika.web.app",
+  "https://bancotalentoserika.firebaseapp.com"
+]);
 
 function setCors(req, res) {
   const origin = req.get("origin");
-  if (origin) res.set("access-control-allow-origin", origin);
+  if (origin && (ALLOWED_ORIGINS.has(origin) || origin.endsWith(".web.app") || origin.endsWith(".firebaseapp.com"))) {
+    res.set("access-control-allow-origin", origin);
+  }
   res.set("vary", "Origin");
   res.set("access-control-allow-headers", "Authorization, Content-Type");
   res.set("access-control-allow-methods", "POST, OPTIONS");
@@ -65,14 +52,6 @@ function normalizePlanCode(value) {
   return `${value || ""}`.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-function slugifyPlanCode(value) {
-  return normalizePlanCode(value)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 async function findCatalogPlanByCode(code) {
   if (!code) return null;
   const snapshot = await db.collection("catalog_items")
@@ -82,39 +61,18 @@ async function findCatalogPlanByCode(code) {
   return snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
 }
 
-function getDefaultCatalogPlan(planCode) {
-  const normalized = normalizePlanCode(planCode);
-  const slug = slugifyPlanCode(planCode);
-  const fallback = DEFAULT_CATALOG_PLANS.find((plan) => (
-    plan.aliases.includes(normalized) || plan.aliases.includes(slug)
-  ));
-  if (!fallback) return null;
-  return {
-    id: `default-${fallback.code}`,
-    code: fallback.code,
-    title: fallback.title,
-    price: fallback.price,
-    billingCycle: "mensal",
-    type: "plan",
-    audience: "company",
-    active: true
-  };
-}
-
 async function authenticateCompany(req) {
   const authorization = `${req.get("authorization") || ""}`;
-  if (!authorization.startsWith("Bearer ")) throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
-  const decoded = await getAuth().verifyIdToken(authorization.slice(7));
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  if (!match?.[1]) throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
+  const decoded = await getAuth().verifyIdToken(match[1], true);
   if (!decoded.uid) throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
   return decoded;
 }
 
 async function getCatalogPlan(planCode) {
   const normalized = normalizePlanCode(planCode);
-  const slug = slugifyPlanCode(planCode);
   let plan = await findCatalogPlanByCode(normalized);
-  if (!plan && slug !== normalized) plan = await findCatalogPlanByCode(slug);
-  if (!plan) plan = getDefaultCatalogPlan(normalized);
   if (!plan) throw Object.assign(new Error("PLAN_NOT_FOUND"), { status: 404 });
   const audience = `${plan.audience || "company"}`.toLowerCase();
   if (plan.active === false || plan.type !== "plan" || audience !== "company") {
@@ -216,6 +174,7 @@ exports.createAsaasCheckout = onRequest({
       getCatalogPlan(planCode),
       db.collection("billing_settings").doc("main").get()
     ]);
+    if (!companySnapshot.exists) throw Object.assign(new Error("COMPANY_NOT_FOUND"), { status: 404 });
     const company = { uid: auth.uid, ...companySnapshot.data() };
     const billing = billingSnapshot.exists ? billingSnapshot.data() : {};
     const client = createAsaasClient({

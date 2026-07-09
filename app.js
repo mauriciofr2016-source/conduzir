@@ -411,7 +411,9 @@ function normalizePriceInput(value) {
 }
 
 function getCatalogItemsByType(type) {
-  const source = Array.isArray(state.catalogItems) && state.catalogItems.length ? state.catalogItems : defaultCatalogItems;
+  const source = Array.isArray(state.catalogItems) && state.catalogItems.length
+    ? state.catalogItems
+    : (state.mode === "local" ? defaultCatalogItems : []);
   return source
     .filter((item) => `${item.type || ""}` === type && item.active !== false)
     .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || `${a.title || ""}`.localeCompare(`${b.title || ""}`, "pt-BR"));
@@ -430,7 +432,9 @@ function getCatalogItemsByAudience(type, audience) {
 }
 
 function getCatalogItemByCode(code) {
-  const source = Array.isArray(state.catalogItems) && state.catalogItems.length ? state.catalogItems : defaultCatalogItems;
+  const source = Array.isArray(state.catalogItems) && state.catalogItems.length
+    ? state.catalogItems
+    : (state.mode === "local" ? defaultCatalogItems : []);
   return source.find((item) => `${item.code || ""}` === `${code || ""}`) || null;
 }
 
@@ -446,18 +450,40 @@ function getBillingCycleLabel(value) {
 function getBillingProviderLabel(value) {
   const normalized = `${value || "asaas"}`.toLowerCase();
   if (normalized === "asaas") return "Asaas";
-  if (normalized === "pagarme") return "Pagar.me";
-  if (normalized === "stripe") return "Stripe Billing";
   return value ? `${value}` : "Asaas";
 }
 function getCheckoutModeLabel(value) {
-  return `${value || "request_only"}` === "hosted_api" ? "Endpoint seguro hospedado" : "Somente registrar intenção";
+  return `${value || "request_only"}` === "hosted_api" ? "Pagamento via endpoint seguro" : "Registrar interesse comercial";
 }
 
 function getActiveBillingSettings() {
   const source = Array.isArray(state.billingSettings) && state.billingSettings.length ? state.billingSettings : defaultBillingSettings;
   const active = source.find((item) => item.active !== false);
   return active || source[0] || defaultBillingSettings[0];
+}
+
+function resolveCheckoutEndpoint(endpoint, settings = getActiveBillingSettings()) {
+  const value = `${endpoint || ""}`.trim();
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  if (value.startsWith("/")) {
+    const publicBaseUrl = `${settings.publicBaseUrl || ""}`.trim().replace(/\/+$/, "");
+    if (publicBaseUrl) return `${publicBaseUrl}${value}`;
+    const projectId = `${window.BT_FIREBASE_CONFIG?.projectId || ""}`.trim();
+    if (projectId && window.location.origin.includes("github.io")) return `https://${projectId}.web.app${value}`;
+  }
+  return value;
+}
+
+async function getAuthenticatedCompanyIdToken() {
+  if (state.mode !== "cloud" || !state.auth) throw new Error("AUTH_REQUIRED");
+  const authUser = state.auth.currentUser;
+  if (!authUser?.uid || typeof authUser.getIdToken !== "function") throw new Error("AUTH_REQUIRED");
+  if (state.currentCompanyProfile?.uid && state.currentCompanyProfile.uid !== authUser.uid) {
+    throw new Error("COMPANY_AUTH_MISMATCH");
+  }
+  state.currentCompanyUser = authUser;
+  return authUser.getIdToken(true);
 }
 
 
@@ -524,7 +550,7 @@ function initNr1FloatingWhatsappButton() {
 }
 
 function getPublicCheckoutLabel() {
-  return "Contratar plano";
+  return "Contratar Plano";
 }
 
 
@@ -1131,7 +1157,7 @@ function bindRealtimeCollections() {
 }
 
 function fallbackCatalogItemsRender() {
-  state.catalogItems = localStore.get(KEYS.catalogItems, defaultCatalogItems);
+  state.catalogItems = state.mode === "local" ? localStore.get(KEYS.catalogItems, defaultCatalogItems) : [];
   renderCatalogItems(state.catalogItems);
 }
 
@@ -1229,17 +1255,17 @@ function renderPaymentSessions(items) {
       <article class="mini-card">
         <strong>${escapeHtml(item.companyName || item.contactEmail || "Empresa")}</strong>
         <p><strong>Plano:</strong> ${escapeHtml(item.planName || "—")} • <strong>Gateway:</strong> ${escapeHtml(getBillingProviderLabel(item.provider || getActiveBillingSettings().provider))}</p>
-        <p><strong>Status:</strong> ${escapeHtml(item.status || "Aguardando checkout")} • <strong>Valor contratado:</strong> ${formatCurrencyBRL(item.contractedPlanPrice ?? item.planPrice ?? 0)}</p>
-        <p class="muted-note">Criado em ${escapeHtml(formatCreatedAt(item.createdAt))}${item.asaasSubscriptionId ? ` • Assinatura Asaas: ${escapeHtml(item.asaasSubscriptionId)}` : ""}${item.sessionUrl ? ` • <a href="${escapeHtml(item.sessionUrl)}" target="_blank" rel="noopener">Abrir checkout</a>` : ""}</p>
+        <p><strong>Status:</strong> ${escapeHtml(item.status || "Aguardando pagamento")} • <strong>Valor contratado:</strong> ${formatCurrencyBRL(item.contractedPlanPrice ?? item.planPrice ?? 0)}</p>
+        <p class="muted-note">Criado em ${escapeHtml(formatCreatedAt(item.createdAt))}${item.asaasSubscriptionId ? ` • Assinatura Asaas: ${escapeHtml(item.asaasSubscriptionId)}` : ""}${item.sessionUrl ? ` • <a href="${escapeHtml(item.sessionUrl)}" target="_blank" rel="noopener">Abrir pagamento</a>` : ""}</p>
       </article>
-    `).join("") : '<article class="mini-card"><strong>Nenhuma solicitação de checkout</strong><p>Quando uma empresa clicar para contratar um plano, a intenção financeira aparecerá aqui.</p></article>';
+    `).join("") : '<article class="mini-card"><strong>Nenhuma solicitação de pagamento</strong><p>Quando uma empresa clicar para contratar um plano, a intenção financeira aparecerá aqui.</p></article>';
   }
   const sessionNotice = document.getElementById("companyPaymentSessionNotice");
   if (sessionNotice && isCompanyPage()) {
     const email = getCurrentCompanyEmail();
     const uid = getCurrentCompanyUid();
     const recent = state.paymentSessions.find((item) => `${item.companyUid || ""}` === uid || normalizeEmail(item.contactEmail) === email);
-    sessionNotice.textContent = recent ? `Última solicitação: ${recent.planName || "Plano"} • ${recent.status || "Aguardando checkout"} • ${formatCreatedAt(recent.createdAt)}` : "Nenhuma solicitação de checkout registrada para este login ainda.";
+    sessionNotice.textContent = recent ? `Última solicitação: ${recent.planName || "Plano"} • ${recent.status || "Aguardando pagamento"} • ${formatCreatedAt(recent.createdAt)}` : "Nenhuma solicitação de pagamento registrada para este login ainda.";
   }
 }
 
@@ -1251,7 +1277,9 @@ function renderAdminPlanServiceCatalog() {
   const billingStatsHost = document.getElementById("adminBillingArchitectureStatus");
   if (!companyPlansHost && !candidatePlansHost && !servicesHost && !billingStatsHost) return;
 
-  const source = Array.isArray(state.catalogItems) && state.catalogItems.length ? state.catalogItems : defaultCatalogItems;
+  const source = Array.isArray(state.catalogItems) && state.catalogItems.length
+    ? state.catalogItems
+    : (state.mode === "local" ? defaultCatalogItems : []);
   const ordered = [...source].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   const companyPlans = ordered.filter((item) => item.type === "plan" && getCatalogAudience(item) === "company");
   const candidatePlans = ordered.filter((item) => item.type === "plan" && getCatalogAudience(item) === "candidate");
@@ -1311,7 +1339,7 @@ function renderCompanyCatalogSections() {
   const serviceSelect = document.getElementById("companyServiceType");
   const architectureNote = document.getElementById("companyBillingArchitectureNote");
   const billingCards = document.getElementById("companyBillingSettingsCards");
-  const plans = getCatalogItemsByAudience("plan", "company");
+  const plans = getCatalogItemsByAudience("plan", "company").filter((item) => item.code);
   const services = getCatalogItemsByAudience("service", "candidate_service");
   const billing = getActiveBillingSettings();
 
@@ -1327,7 +1355,7 @@ function renderCompanyCatalogSections() {
         </div>
         <p>${escapeHtml(item.shortDescription || item.description || "Sem descrição.")}</p>
         <p class="muted-note top-gap"><strong>Gateway preparado:</strong> ${escapeHtml(item.gateway || getBillingProviderLabel(getActiveBillingSettings().provider))}</p>
-        <button class="btn btn-primary top-gap" type="button" data-plan-contract="${escapeHtml(item.code || item.title || "")}">${escapeHtml(getPublicCheckoutLabel())}</button>
+        <button class="btn btn-primary top-gap" type="button" data-plan-contract="${escapeHtml(item.code || "")}">${escapeHtml(getPublicCheckoutLabel())}</button>
       </article>
     `).join("") : '<article class="mini-card"><strong>Nenhum plano ativo</strong><p>O administrador ainda não publicou planos nesta versão.</p></article>' ;
   }
@@ -1357,7 +1385,7 @@ function renderCompanyCatalogSections() {
 
   if (architectureNote) {
     architectureNote.textContent = billing.checkoutMode === "hosted_api" && billing.createCheckoutEndpoint
-      ? `Checkout profissional configurado via ${getBillingProviderLabel(billing.provider)}. O valor do catalogo e usado somente para novas assinaturas e fica travado no contrato criado.`
+      ? `Pagamento Asaas configurado via endpoint seguro. O valor do catalogo e usado somente para novas assinaturas e fica travado no contrato criado.`
       : `O clique registra a intencao comercial com ${getBillingProviderLabel(billing.provider)}. Alteracoes de preco afetam apenas novas assinaturas.`;
   }
   updateNr1FloatingWhatsappButton();
@@ -1365,7 +1393,9 @@ function renderCompanyCatalogSections() {
 }
 
 function renderCatalogItems(items) {
-  state.catalogItems = Array.isArray(items) && items.length ? items : defaultCatalogItems;
+  state.catalogItems = Array.isArray(items) && items.length
+    ? items
+    : (state.mode === "local" ? defaultCatalogItems : []);
   if (state.mode === "local") localStore.set(KEYS.catalogItems, state.catalogItems);
   renderAdminPlanServiceCatalog();
   renderCompanyCatalogSections();
@@ -1413,20 +1443,27 @@ function showAdminCatalogNotice(message, type = "success") {
 }
 
 async function saveCatalogItemRecord(payload) {
+  const normalizedType = payload.type === "service" ? "service" : "plan";
+  const normalizedAudience = normalizedType === "plan"
+    ? "company"
+    : (payload.audience || "candidate_service");
   const data = {
-    type: payload.type === "service" ? "service" : "plan",
-    audience: payload.audience || (payload.type === "service" ? "candidate_service" : "company"),
+    type: normalizedType,
+    audience: normalizedAudience,
     title: `${payload.title || ""}`.trim(),
     code: slugifyCatalogValue(payload.code || payload.title),
     shortDescription: `${payload.shortDescription || ""}`.trim(),
     description: `${payload.description || ""}`.trim(),
     price: normalizePriceInput(payload.price),
-    billingCycle: `${payload.billingCycle || (payload.type === "service" ? "avulso" : "mensal")}`.trim().toLowerCase(),
+    billingCycle: `${payload.billingCycle || (normalizedType === "service" ? "avulso" : "mensal")}`.trim().toLowerCase(),
     gateway: `${payload.gateway || "Asaas"}`.trim(),
     sortOrder: Number(payload.sortOrder || 0),
-    active: `${payload.active}` !== "false",
+    active: normalizedType === "plan" && normalizedAudience === "company" ? true : `${payload.active}` !== "false",
     featured: `${payload.featured}` === "true"
   };
+  if (!data.code || !data.title || !Number.isFinite(data.price) || data.price <= 0 || !data.billingCycle) {
+    throw new Error("CATALOG_PLAN_REQUIRED_FIELDS");
+  }
   const currentId = `${payload.catalogId || ""}`.trim();
   const source = Array.isArray(state.catalogItems) ? state.catalogItems : [];
   const duplicate = source.find((item) => `${item.code || ""}` === data.code && `${item.id || item.code || ""}` !== currentId);
@@ -1435,6 +1472,12 @@ async function saveCatalogItemRecord(payload) {
     const existing = source.find((item) => `${item.id || item.code || ""}` === currentId);
     if (existing?.id && (state.mode === "cloud" && state.firestore)) {
       await updateRecord("catalogItems", existing.id, data);
+    } else if (state.mode === "cloud" && state.firestore) {
+      await setDoc(doc(state.firestore, COLLECTIONS.catalogItems, data.code), {
+        ...data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
     } else {
       const next = source.map((item) => `${item.id || item.code || ""}` === currentId ? { ...item, ...data, id: item.id || item.code || currentId } : item);
       localStore.set(KEYS.catalogItems, next);
@@ -1443,11 +1486,22 @@ async function saveCatalogItemRecord(payload) {
     }
     return;
   }
+  if (state.mode === "cloud" && state.firestore) {
+    await setDoc(doc(state.firestore, COLLECTIONS.catalogItems, data.code), {
+      ...data,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    return;
+  }
   await saveRecord("catalogItems", data);
 }
 
 async function toggleCatalogItemRecord(record) {
   const nextStatus = !(record.active !== false);
+  if (record.type === "plan" && getCatalogAudience(record) === "company" && nextStatus === false) {
+    throw new Error("COMPANY_PLAN_ACTIVE_REQUIRED");
+  }
   if (record.id && state.mode === "cloud" && state.firestore) {
     await updateRecord("catalogItems", record.id, { active: nextStatus });
     return;
@@ -1487,7 +1541,13 @@ function initAdminCatalogManagement() {
       await hydrateInitialData();
     } catch (error) {
       console.error(error);
-      showAdminCatalogNotice(error.message === "CATALOG_CODE_EXISTS" ? "Já existe um plano ou serviço com esse código. Ajuste o código e tente novamente." : "Não foi possível salvar o item agora.", "error");
+      let message = "Nao foi possivel salvar o item agora.";
+      if (error.message === "CATALOG_CODE_EXISTS") {
+        message = "Ja existe um plano ou servico com esse codigo. Ajuste o codigo e tente novamente.";
+      } else if (error.message === "CATALOG_PLAN_REQUIRED_FIELDS") {
+        message = "Informe codigo, titulo, valor e ciclo de cobranca validos para salvar o plano.";
+      }
+      showAdminCatalogNotice(message, "error");
     } finally {
       setButtonBusy(submit, "Salvando...", submit?.dataset?.idleLabel || "Salvar item", false);
     }
@@ -1516,7 +1576,7 @@ function initAdminCatalogManagement() {
       }
     } catch (error) {
       console.error(error);
-      showAdminCatalogNotice("Não foi possível concluir essa ação agora.", "error");
+      showAdminCatalogNotice(error.message === "COMPANY_PLAN_ACTIVE_REQUIRED" ? "Planos empresariais usados no pagamento Asaas devem permanecer ativos em catalog_items." : "Nao foi possivel concluir essa acao agora.", "error");
     }
   });
 }
@@ -1606,7 +1666,7 @@ async function startProfessionalCheckout(plan) {
     billingCycle: contractedPlan.billingCycle,
     currency: billing.defaultCurrency || "brl",
     provider: billing.provider || "asaas",
-    status: billing.checkoutMode === "hosted_api" ? "Checkout iniciado" : "Aguardando checkout",
+    status: billing.checkoutMode === "hosted_api" ? "Pagamento iniciado" : "Aguardando pagamento",
     successUrl: billing.successUrl || "",
     cancelUrl: billing.cancelUrl || "",
     requestMode: billing.checkoutMode || "request_only"
@@ -1624,17 +1684,15 @@ async function startProfessionalCheckout(plan) {
     planActive: false
   });
 
-  if (billing.checkoutMode === "hosted_api" && billing.createCheckoutEndpoint) {
+  const checkoutEndpoint = resolveCheckoutEndpoint(billing.createCheckoutEndpoint, billing);
+  if (billing.checkoutMode === "hosted_api" && checkoutEndpoint) {
     try {
-      const secureHeaders = { "Content-Type": "application/json" };
-      if (state.mode === "cloud" && state.auth?.currentUser?.getIdToken) {
-        try {
-          secureHeaders.Authorization = `Bearer ${await state.auth.currentUser.getIdToken()}`;
-        } catch (tokenError) {
-          console.warn("Nao foi possivel gerar token seguro para checkout:", tokenError);
-        }
-      }
-      const response = await fetch(billing.createCheckoutEndpoint, {
+      const idToken = await getAuthenticatedCompanyIdToken();
+      const secureHeaders = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`
+      };
+      const response = await fetch(checkoutEndpoint, {
         method: "POST",
         headers: secureHeaders,
         body: JSON.stringify({ planCode: sessionPayload.planCode })
@@ -1654,8 +1712,9 @@ async function startProfessionalCheckout(plan) {
       return { redirected: false, sessionPayload };
     } catch (error) {
       console.error(error);
-      sessionPayload.status = "Falha ao iniciar checkout";
+      sessionPayload.status = "Falha ao iniciar pagamento";
       sessionPayload.errorMessage = error.message || "CHECKOUT_ENDPOINT_FAILED";
+      if (state.mode === "cloud") throw error;
       await createPaymentSessionRecord(sessionPayload);
       await createPaymentHistoryRecord({ ...sessionPayload, status: sessionPayload.status });
       await persistCompanyProfile(companyContract());
@@ -3583,20 +3642,20 @@ function initJobPage() {
     const catalogPlan = getCatalogItemByCode(code) || getCatalogItemsByType("plan").find((item) => item.title === code) || null;
     if (!catalogPlan) return showCompanyAuthNotice("Plano não encontrado para iniciar a contratação.", "error");
     try {
-      setButtonBusy(button, "Preparando pagamento...", button.textContent || "Contratar plano", true);
+      setButtonBusy(button, "Preparando pagamento...", button.textContent || "Contratar Plano", true);
       const result = await startProfessionalCheckout(catalogPlan);
       await hydrateInitialData();
       syncCompanyUiState();
       if (!result?.redirected) {
-        showCompanyAuthNotice(`Solicitação do ${catalogPlan.title} registrada com status pendente. Assim que o checkout for confirmado pelo backend/webhook, o acesso será liberado.`);
+        showCompanyAuthNotice(`Solicitação do ${catalogPlan.title} registrada com status pendente. Assim que o pagamento for confirmado pelo Asaas, o acesso será liberado.`);
       }
     } catch (error) {
       console.error(error);
       await hydrateInitialData();
       syncCompanyUiState();
-      showCompanyAuthNotice("Não foi possível abrir o checkout seguro agora. A solicitação foi registrada como pendente para acompanhamento comercial.", "error");
+      showCompanyAuthNotice("Não foi possível abrir o pagamento seguro agora. Tente novamente em instantes ou fale com o suporte.", "error");
     } finally {
-      setButtonBusy(button, "Preparando pagamento...", button.dataset.idleLabel || "Contratar plano", false);
+      setButtonBusy(button, "Preparando pagamento...", button.dataset.idleLabel || "Contratar Plano", false);
     }
   });
   const form = document.getElementById("jobForm");

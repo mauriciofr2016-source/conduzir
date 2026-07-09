@@ -155,16 +155,16 @@
             <div class="card nested-card">
               <div class="panel-head compact-head">
                 <div><span class="section-tag">Gateway e assinatura</span><h3>Configuração profissional de cobrança</h3></div>
-                <div class="badge">Checkout + webhook</div>
+                <div class="badge">Pagamento + webhook</div>
               </div>
               <form id="adminBillingSettingsForm" class="form-grid">
-                <label><span>Gateway principal</span><select name="provider"><option value="asaas">Asaas</option><option value="stripe">Stripe Billing</option><option value="pagarme">Pagar.me</option></select></label>
-                <label><span>Modo do checkout</span><select name="checkoutMode"><option value="request_only">Somente registrar intenção</option><option value="hosted_api">Endpoint seguro hospedado</option></select></label>
+                <label><span>Gateway principal</span><select name="provider"><option value="asaas">Asaas</option></select></label>
+                <label><span>Modo do pagamento</span><select name="checkoutMode"><option value="request_only">Registrar interesse comercial</option><option value="hosted_api">Endpoint seguro do Asaas</option></select></label>
                 <label><span>URL base pública</span><input type="url" name="publicBaseUrl" placeholder="Ex.: https://seudominio.com" /></label>
-                <label><span>Endpoint criar checkout</span><input type="text" name="createCheckoutEndpoint" placeholder="/api/asaas/checkout" /></label>
+                <label><span>Endpoint criar pagamento</span><input type="text" name="createCheckoutEndpoint" placeholder="/api/asaas/checkout" /></label>
                 <label><span>Webhook esperado</span><input type="text" name="webhookEndpoint" placeholder="/api/asaas/webhook" /></label>
-                <label><span>URL de sucesso</span><input type="url" name="successUrl" placeholder="Ex.: https://seudominio.com/empresa.html?checkout=sucesso" /></label>
-                <label><span>URL de cancelamento</span><input type="url" name="cancelUrl" placeholder="Ex.: https://seudominio.com/empresa.html?checkout=cancelado" /></label>
+                <label><span>URL de sucesso</span><input type="url" name="successUrl" placeholder="Ex.: https://seudominio.com/empresa.html?pagamento=sucesso" /></label>
+                <label><span>URL de cancelamento</span><input type="url" name="cancelUrl" placeholder="Ex.: https://seudominio.com/empresa.html?pagamento=cancelado" /></label>
                 <label><span>Moeda padrão</span><select name="defaultCurrency"><option value="brl">BRL</option><option value="usd">USD</option></select></label>
                 <label><span>Dias de teste grátis</span><input type="number" name="trialDays" min="0" step="1" value="0" /></label>
                 <label><span>Status</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
@@ -185,7 +185,7 @@
                 <label><span>Código interno</span><input type="text" name="code" placeholder="Ex.: plano-profissional" /></label>
                 <label><span>Valor</span><input type="text" name="price" placeholder="Ex.: 397,00" required /></label>
                 <label><span>Ciclo de cobrança</span><select name="billingCycle"><option value="mensal">Mensal</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option><option value="avulso">Avulso</option></select></label>
-                <label><span>Gateway previsto</span><select name="gateway"><option>Asaas</option><option>Stripe Billing</option><option>Pagar.me</option><option>Mercado Pago</option><option>Faturamento manual</option></select></label>
+                <label><span>Gateway previsto</span><select name="gateway"><option>Asaas</option><option>Faturamento manual</option></select></label>
                 <label><span>Ordem de exibição</span><input type="number" name="sortOrder" min="0" value="0" /></label>
                 <label><span>Status</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
                 <label><span>Destaque visual</span><select name="featured"><option value="false">Normal</option><option value="true">Destacado</option></select></label>
@@ -218,7 +218,7 @@
             </div>
           </div>
           <div class="card nested-card top-gap">
-            <div class="panel-head compact-head"><div><span class="section-tag">Solicitações de checkout</span><h3>Fila comercial de pagamento</h3></div></div>
+            <div class="panel-head compact-head"><div><span class="section-tag">Solicitações de pagamento</span><h3>Fila comercial de pagamento</h3></div></div>
             <div id="adminPaymentSessionsList" class="stack-list"></div>
           </div>
         </div>
