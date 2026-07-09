@@ -198,7 +198,7 @@ async function authenticateCompany(req) {
     }
   } catch (error) {
     if (error.message === "401_TOKEN_INVALID") throw error;
-    logger.warn("Usuario Firebase Auth nao encontrado no checkout Asaas", {
+    logger.warn("Usuário Firebase Auth não encontrado no checkout Asaas", {
       uid: decoded.uid,
       code: error.code || "",
       message: error.message || ""

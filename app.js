@@ -36,7 +36,7 @@ const KEYS = {
   candidateAuthUser: "bt_candidate_auth_user",
   candidateProfile: "bt_candidate_profile",
   candidateAccounts: "bt_candidate_accounts",
-  companyAuthUser: "bt_company_auth_user",
+  companyAuthUser: "conduzir_company_session",
   companyProfile: "bt_company_profile",
   companyAccounts: "bt_company_accounts",
   companies: "bt_companies",
@@ -44,7 +44,7 @@ const KEYS = {
   billingSettings: "bt_billing_settings",
   paymentSessions: "bt_payment_sessions",
   paymentHistory: "bt_payment_history",
-  systemSession: "bt_system_session"
+  systemSession: "conduzir_admin_session"
 };
 
 const COLLECTIONS = {
@@ -425,7 +425,7 @@ function formatCurrencyBRL(value) {
 function slugifyCatalogValue(value) {
   return `${value || ""}`
     .normalize("NFD")
-    .replace(/[Ì€-Í¯]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || `item-${Date.now()}`;
@@ -728,6 +728,36 @@ function setSessionUser(key, user) {
   else localStore.remove(key);
 }
 
+function removeStorageKeys(keys = []) {
+  keys.forEach((key) => {
+    try { localStorage.removeItem(key); } catch {}
+    try { sessionStorage.removeItem(key); } catch {}
+  });
+}
+
+function sanitizeCompanyAuthContext() {
+  if (!isCompanyPage()) return;
+  removeStorageKeys([
+    KEYS.systemSession,
+    "bt_system_session",
+    "conduzir_admin_session",
+    "admin_session",
+    "admin.master"
+  ]);
+  state.currentSystemUser = null;
+
+  const url = new URL(window.location.href);
+  const sensitiveParams = ["email", "senha", "password", "login"];
+  const hadSensitiveParam = sensitiveParams.some((param) => url.searchParams.has(param));
+  sensitiveParams.forEach((param) => url.searchParams.delete(param));
+  if (hadSensitiveParam) {
+    window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  const loginForm = document.getElementById("companyLoginForm");
+  clearFormFields(loginForm);
+}
+
 function clearFormFields(form) {
   if (!form) return;
   form.reset();
@@ -741,7 +771,7 @@ function setButtonBusy(button, busyLabel, idleLabel, isBusy) {
   button.textContent = isBusy ? busyLabel : (button.dataset.idleLabel || idleLabel || button.textContent);
 }
 function clearLegacySensitiveLocalData() {
-  [KEYS.candidateAccounts, KEYS.companyAccounts].forEach((key) => localStore.remove(key));
+  [KEYS.candidateAccounts, KEYS.companyAccounts, "bt_company_auth_user"].forEach((key) => localStore.remove(key));
   const systemUsers = localStore.get(KEYS.systemUsers, []);
   if (Array.isArray(systemUsers) && systemUsers.length) {
     const sanitized = systemUsers.map((item) => {
@@ -1045,10 +1075,10 @@ function syncCompanyUiState() {
   const authShell = document.getElementById("companyAuthShell");
   const dashboard = document.getElementById("companyDashboard");
   const logged = document.getElementById("companyLoggedUser");
-  const user = state.currentCompanyUser || state.currentCompanyProfile;
+  const user = state.currentCompanyProfile;
   if (authShell) authShell.classList.toggle("is-hidden", Boolean(user));
   if (dashboard) dashboard.classList.toggle("is-hidden", !user);
-  if (logged) logged.textContent = user ? `${state.currentCompanyProfile?.empresa || user.displayName || "Empresa"} • ${user.email || state.currentCompanyProfile?.email || ""}` : "Nenhuma empresa logada";
+  if (logged) logged.textContent = user ? `${user.empresa || state.currentCompanyUser?.displayName || "Empresa"} • ${user.email || state.currentCompanyUser?.email || ""}` : "Nenhuma empresa logada";
   syncCompanyPlanUi();
   renderCompanyCatalogSections();
   renderCandidateViews(state.candidates);
@@ -1067,15 +1097,33 @@ async function createCompanyAccount(data) {
 async function loginCompanyAccount(data) {
   const normalizedEmail = normalizeEmail(data.email);
   if (!state.auth || state.mode !== "cloud") throw new Error("AUTH_REQUIRED");
+  if (normalizedEmail === MASTER_ADMIN.email || `${data.email || ""}`.trim().toLowerCase() === MASTER_ADMIN.login) {
+    throw new Error("COMPANY_NOT_ALLOWED");
+  }
   const credentials = await signInWithEmailAndPassword(state.auth, normalizedEmail, data.senha);
   const profileRef = doc(state.firestore, COLLECTIONS.companies, credentials.user.uid);
   const profileSnap = await getDoc(profileRef);
   const profileData = profileSnap.exists() ? profileSnap.data() : null;
+  if (!profileSnap.exists() || !profileData) {
+    try { await signOut(state.auth); } catch {}
+    state.currentCompanyUser = null;
+    state.currentCompanyProfile = null;
+    setSessionUser(KEYS.companyAuthUser, null);
+    throw new Error("COMPANY_NOT_FOUND");
+  }
+  if (profileData.uid && profileData.uid !== credentials.user.uid) {
+    try { await signOut(state.auth); } catch {}
+    state.currentCompanyUser = null;
+    state.currentCompanyProfile = null;
+    setSessionUser(KEYS.companyAuthUser, null);
+    throw new Error("COMPANY_NOT_ALLOWED");
+  }
   if (accountIsRestricted(profileData?.status)) {
     try { await signOut(state.auth); } catch {}
     throw new Error("ACCOUNT_BLOCKED");
   }
   state.currentCompanyUser = credentials.user;
+  state.currentCompanyProfile = { id: profileSnap.id, ...profileData };
   setSessionUser(KEYS.companyAuthUser, { uid: credentials.user.uid, email: credentials.user.email, displayName: credentials.user.displayName || "Empresa" });
   return credentials.user;
 }
@@ -1509,16 +1557,16 @@ function renderCompanyCatalogSections() {
       <article class="catalog-card ${item.featured ? "is-featured" : ""}">
         <div class="catalog-card-head">
           <div>
-            <span class="record-type-badge">${item.featured ? "Mais indicado" : "Servico avulso"}</span>
-            <h3>${escapeHtml(item.title || "Servico")}</h3>
+            <span class="record-type-badge">${item.featured ? "Mais indicado" : "Serviço avulso"}</span>
+            <h3>${escapeHtml(item.title || "Serviço")}</h3>
           </div>
           <div class="catalog-price">${formatCurrencyBRL(item.price || 0)}<small>pagamento unico</small></div>
         </div>
-        <p>${escapeHtml(item.shortDescription || item.description || "Servico executado pela consultoria.")}</p>
+        <p>${escapeHtml(item.shortDescription || item.description || "Serviço executado pela consultoria.")}</p>
         <p class="muted-note top-gap"><strong>Libera:</strong> ${escapeHtml(permissionSummary(item.permissions))}</p>
         <button class="btn btn-primary top-gap" type="button" data-service-contract="${escapeHtml(item.code || "")}">Contratar Serviço</button>
       </article>
-    `).join("") : '<article class="mini-card"><strong>Nenhum servico avulso publicado</strong><p>O administrador ainda nao publicou servicos avulsos para empresas.</p></article>';
+    `).join("") : '<article class="mini-card"><strong>Nenhum serviço avulso publicado</strong><p>O administrador ainda não publicou serviços avulsos para empresas.</p></article>';
   }
 
   if (billingCards) {
@@ -1696,7 +1744,7 @@ function initAdminCatalogManagement() {
       console.error(error);
       let message = "Nao foi possivel salvar o item agora.";
       if (error.message === "CATALOG_CODE_EXISTS") {
-        message = "Ja existe um plano ou servico com esse codigo. Ajuste o codigo e tente novamente.";
+        message = "Já existe um plano ou serviço com esse código. Ajuste o código e tente novamente.";
       } else if (error.message === "CATALOG_PLAN_REQUIRED_FIELDS") {
         message = "Informe codigo, titulo, valor e ciclo de cobranca validos para salvar o plano.";
       }
@@ -3695,10 +3743,10 @@ function initJobPage() {
   document.getElementById("candidateCards")?.addEventListener("click", async (event) => {
     const serviceButton = event.target.closest("[data-company-candidate-service]");
     if (serviceButton) {
-      if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faca login para contratar um servico vinculado ao candidato.", "error");
+      if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faça login para contratar um serviço vinculado ao candidato.", "error");
       const serviceCode = serviceButton.dataset.companyCandidateService || "";
       const catalogService = getCatalogItemByCode(serviceCode) || getCatalogItemsByType("service").find((item) => item.title === serviceButton.dataset.serviceTitle) || null;
-      if (!catalogService) return showCompanyAuthNotice("Servico nao encontrado para iniciar a contratacao.", "error");
+      if (!catalogService) return showCompanyAuthNotice("Serviço não encontrado para iniciar a contratação.", "error");
       try {
         setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.textContent || "Contratar", true);
         const result = await startProfessionalCheckout(catalogService, {
@@ -3706,12 +3754,12 @@ function initJobPage() {
             candidateId: serviceButton.dataset.candidateId || "",
             candidateName: serviceButton.dataset.candidateName || "",
             candidateEmail: serviceButton.dataset.candidateEmail || "",
-            message: `Servico contratado dentro do curriculo do candidato ${serviceButton.dataset.candidateName || ""}. Toda execucao deve passar pela consultora.`
+            message: `Serviço contratado dentro do currículo do candidato ${serviceButton.dataset.candidateName || ""}. Toda execução deve passar pela consultora.`
           }
         });
         await hydrateInitialData();
         if (!result?.redirected) {
-          showCompanyAuthNotice("Pagamento do servico iniciado. A solicitacao sera liberada apos confirmacao do Asaas.");
+          showCompanyAuthNotice("Pagamento do serviço iniciado. A solicitação será liberada após confirmação do Asaas.");
           document.querySelector('[data-tab="contato"]')?.click();
         }
       } catch (error) {
@@ -3767,6 +3815,10 @@ function initJobPage() {
       console.error(error);
       const message = error?.message === "ACCOUNT_BLOCKED"
         ? "O acesso da empresa está bloqueado. Fale com o suporte para regularizar o cadastro."
+        : error?.message === "COMPANY_NOT_FOUND"
+        ? "Este usuário não possui cadastro empresarial vinculado. Use um acesso de empresa."
+        : error?.message === "COMPANY_NOT_ALLOWED"
+        ? "Este acesso não pertence à área da empresa."
         : error?.message === "AUTH_REQUIRED"
         ? "O login seguro da empresa depende do Firebase ativo. Verifique a configuração."
         : "E-mail ou senha incorretos.";
@@ -3788,21 +3840,21 @@ function initJobPage() {
     const serviceButton = event.target.closest("[data-service-contract]");
     if (serviceButton && isCompanyPage()) {
       if (serviceButton.disabled) return;
-      if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faca login para contratar um servico.", "error");
+      if (!state.currentCompanyUser && !state.currentCompanyProfile) return showCompanyAuthNotice("Faça login para contratar um serviço.", "error");
       const serviceCode = serviceButton.dataset.serviceContract || "";
       const catalogService = getCatalogItemByCode(serviceCode) || null;
-      if (!catalogService) return showCompanyAuthNotice("Servico nao encontrado para iniciar a contratacao.", "error");
+      if (!catalogService) return showCompanyAuthNotice("Serviço não encontrado para iniciar a contratação.", "error");
       try {
         setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.textContent || "Contratar Serviço", true);
         const result = await startProfessionalCheckout(catalogService, {
           serviceContext: {
-            message: `Servico avulso contratado pela empresa: ${catalogService.title || serviceCode}.`
+            message: `Serviço avulso contratado pela empresa: ${catalogService.title || serviceCode}.`
           }
         });
         await hydrateInitialData();
         syncCompanyUiState();
         if (!result?.redirected) {
-          showCompanyAuthNotice("Pagamento do servico iniciado. A solicitacao sera liberada apos confirmacao do Asaas.");
+          showCompanyAuthNotice("Pagamento do serviço iniciado. A solicitação será liberada após confirmação do Asaas.");
         }
       } catch (error) {
         console.error(error);
@@ -4405,6 +4457,7 @@ async function init() {
   initMenu();
   initTabs();
   clearLegacySensitiveLocalData();
+  sanitizeCompanyAuthContext();
   if (hasFirebaseConfig()) await setupCloudMode();
   else { state.mode = "local"; showGlobalNotice("Versão pronta. Para salvar na nuvem, preencha o arquivo firebase-config.js."); }
   injectRuntimeInfo();
@@ -4421,7 +4474,7 @@ async function init() {
       }
     });
   }
-  if (state.mode === "local") {
+  if (state.mode === "local" && (isAdminPage() || isConsultantPage())) {
     const systemSession = localStore.get(KEYS.systemSession, null);
     if (systemSession && (systemSession.perfil !== "Administrador" || isMasterAdminRecord(systemSession))) {
       state.currentSystemUser = systemSession;

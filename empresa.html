@@ -34,8 +34,8 @@
           <article class="card nested-card auth-card">
             <div class="panel-head compact-head"><div><span class="section-tag">Já tenho acesso</span><h2>Login da empresa</h2></div></div>
             <form class="form-grid" id="companyLoginForm">
-              <label><span>E-mail</span><input type="email" name="email" required placeholder="empresa@email.com" /></label>
-              <label><span>Senha</span><input type="password" name="senha" required placeholder="Sua senha" /></label>
+              <label><span>E-mail</span><input type="email" name="email" required placeholder="empresa@email.com" autocomplete="username" /></label>
+              <label><span>Senha</span><input type="password" name="senha" required placeholder="Sua senha" autocomplete="current-password" /></label>
               <div class="full form-actions"><button class="btn btn-primary" type="submit" id="companyLoginBtn">Entrar</button></div>
             </form>
           </article>
@@ -43,8 +43,8 @@
             <div class="panel-head compact-head"><div><span class="section-tag">Primeiro acesso</span><h2>Criar conta da empresa</h2></div></div>
             <form class="form-grid" id="companyRegisterForm">
               <label><span>Nome da empresa</span><input name="empresa" required placeholder="Nome empresarial" /></label>
-              <label><span>E-mail</span><input type="email" name="email" required placeholder="empresa@email.com" /></label>
-              <label><span>Usuário de acesso</span><input name="login" required placeholder="login.da.empresa" /></label>
+              <label><span>E-mail</span><input type="email" name="email" required placeholder="empresa@email.com" autocomplete="username" /></label>
+              <label><span>Usuário de acesso</span><input name="login" required placeholder="login.da.empresa" autocomplete="username" /></label>
               <label><span>Senha</span><input type="password" name="senha" minlength="6" required placeholder="Mínimo 6 caracteres" /></label>
               <label><span>Confirmar senha</span><input type="password" name="confirmarSenha" minlength="6" required placeholder="Repita a senha" /></label>
               <label><span>Telefone</span><input name="telefone" placeholder="(00) 00000-0000" /></label>
