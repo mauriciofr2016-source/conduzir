@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+﻿import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import {
   getFirestore,
   collection,
@@ -85,12 +85,12 @@ const DEFAULT_PERMISSIONS = Object.freeze({
   reports: false
 });
 const PERMISSION_LABELS = {
-  curriculumAccess: "Banco de CurrÃ­culos",
-  selfServiceHiring: "SeleÃ§Ã£o por conta prÃ³pria",
+  curriculumAccess: "Banco de Currículos",
+  selfServiceHiring: "Seleção por conta própria",
   consultancy: "Consultoria/acompanhamento",
   managedRecruitment: "Recrutamento gerenciado",
-  nr1: "DiagnÃ³stico NR1",
-  reports: "RelatÃ³rios"
+  nr1: "Diagnóstico NR1",
+  reports: "Relatórios"
 };
 
 function isMasterAdminRecord(user) {
@@ -425,7 +425,7 @@ function formatCurrencyBRL(value) {
 function slugifyCatalogValue(value) {
   return `${value || ""}`
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[Ì€-Í¯]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || `item-${Date.now()}`;
@@ -478,7 +478,7 @@ function getCatalogItemKind(item = {}) {
 function permissionSummary(permissions = {}) {
   const normalized = normalizePermissions(permissions);
   const labels = PERMISSION_KEYS.filter((key) => normalized[key]).map((key) => PERMISSION_LABELS[key] || key);
-  return labels.length ? labels.join(", ") : "Sem permissÃµes automÃ¡ticas";
+  return labels.length ? labels.join(", ") : "Sem permissões automáticas";
 }
 
 function companyHasPermission(key) {
@@ -2419,7 +2419,7 @@ function renderCandidateCards(items, containerId) {
       <p><strong>Resumo:</strong> ${escapeHtml(containerId === "candidateCards" ? publicSummary : (item.resumo || "Sem resumo preenchido."))}</p>
       ${containerId === "consultantCandidates" ? `<details class="resume-toggle-box"><summary>Mostrar mais</summary>${renderProfessionalResumeHtml(item, disc, false)}</details>` : ""}
       ${disc && (containerId === "candidateCards" || containerId === "consultantCandidates") ? renderDiscChartHtml(disc, true) : ""}
-      ${validated ? `<p class="validated-note">✓ Selo Validado pela Conduzir</p>` : ""}
+      ${validated ? `<p class="validated-note">âœ“ Selo Validado pela Conduzir</p>` : ""}
       ${consultantActions}${companyActions}
       ${containerId === "candidateCards" ? renderCandidateLinkedServicesForCompany(item) : ""}
     </article>`;
@@ -2704,7 +2704,7 @@ function renderInterviews(data) {
         <td>
           <div class="interview-status-box"><strong>${escapeHtml(item.status || "—")}</strong>
             <div class="candidate-action-row compact-actions">
-              <button class="btn btn-secondary btn-small ${`${item.status || ""}`.toLowerCase().includes("realizada") ? "is-selected" : ""}" type="button" data-interview-status="Realizada" data-interview-id="${id}">${`${item.status || ""}`.toLowerCase().includes("realizada") ? "✓ Realizada" : "Realizada"}</button>
+              <button class="btn btn-secondary btn-small ${`${item.status || ""}`.toLowerCase().includes("realizada") ? "is-selected" : ""}" type="button" data-interview-status="Realizada" data-interview-id="${id}">${`${item.status || ""}`.toLowerCase().includes("realizada") ? "âœ“ Realizada" : "Realizada"}</button>
               <button class="btn btn-primary btn-small" type="button" data-interview-reschedule="true" data-interview-id="${id}">Reagendar</button>
             </div>
           </div>

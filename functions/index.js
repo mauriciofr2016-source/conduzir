@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
@@ -19,16 +19,15 @@ const {
   toDateOnly
 } = require("./lib/billing");
 
-initializeApp();
-
-const db = getFirestore();
+const PROJECT_ID = "bancotalentoserika";
+const adminApp = initializeApp({ projectId: PROJECT_ID });
+const db = getFirestore(adminApp);
 const asaasApiKey = defineSecret("ASAAS_API_KEY");
 const asaasWebhookToken = defineSecret("ASAAS_WEBHOOK_TOKEN");
 const asaasEnvironment = defineString("ASAAS_ENV", { default: "sandbox" });
 const asaasBillingType = defineString("ASAAS_BILLING_TYPE", { default: "UNDEFINED" });
 const REGION = "southamerica-east1";
 const CHECKOUT_LOCK_MINUTES = 3;
-const PROJECT_ID = "bancotalentoserika";
 const ALLOWED_ORIGINS = new Set([
   "https://mauriciofr2016-source.github.io",
   "https://bancotalentoserika.web.app",
@@ -76,12 +75,18 @@ function sanitizedHeaders(req) {
   return headers;
 }
 
+function getAuthorizationHeader(req) {
+  return `${req.headers?.authorization || req.headers?.Authorization || req.get("authorization") || req.get("Authorization") || ""}`;
+}
+
 function authDebug(req, step, extra = {}) {
   logger.info("asaasCheckoutDebug", {
     step,
     method: req.method,
     origin: req.get("origin") || "",
     path: req.path || "",
+    configuredProjectId: PROJECT_ID,
+    adminProjectId: adminApp.options?.projectId || "",
     ...extra
   });
 }
@@ -112,26 +117,29 @@ async function findCatalogItemByCode(code) {
 }
 
 async function authenticateCompany(req) {
-  const authorization = `${req.get("authorization") || req.get("Authorization") || ""}`;
-  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  const authorization = getAuthorizationHeader(req);
+  const token = authorization.replace(/^Bearer\s+/i, "").trim();
+  const hasBearer = /^Bearer\s+/i.test(authorization);
   authDebug(req, "auth_header_received", {
     hasAuthorization: Boolean(authorization),
-    hasBearer: Boolean(match),
-    tokenLength: match?.[1]?.length || 0,
-    authorizationPreview: match?.[1] ? maskToken(match[1]) : ""
+    hasBearer,
+    tokenLength: token.length,
+    authorizationHeaderSource: req.headers?.authorization ? "req.headers.authorization" : (req.headers?.Authorization ? "req.headers.Authorization" : "req.get"),
+    authorizationPreview: token ? maskToken(token) : ""
   });
   if (!authorization) {
     authDebug(req, "returning_401", { reason: "401_TOKEN_MISSING" });
     throw Object.assign(new Error("401_TOKEN_MISSING"), { status: 401 });
   }
-  if (!match?.[1]) {
+  if (!hasBearer || !token) {
     authDebug(req, "returning_401", { reason: "401_TOKEN_INVALID", detail: "missing_bearer" });
     throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
   }
   let decoded;
   try {
-    decoded = await getAuth().verifyIdToken(match[1]);
+    decoded = await getAuth(adminApp).verifyIdToken(token);
     authDebug(req, "verify_id_token_success", {
+      verified: true,
       uid: decoded.uid || "",
       email: decoded.email || "",
       aud: decoded.aud || "",
@@ -141,21 +149,26 @@ async function authenticateCompany(req) {
     logger.warn("Token Firebase invalido no checkout Asaas", {
       code: error.code,
       message: error.message,
+      name: error.name || "",
+      stack: error.stack || "",
       origin: req.get("origin") || "",
       hasAuthorizationHeader: Boolean(authorization),
-      hasBearer: Boolean(match),
-      tokenLength: match?.[1]?.length || 0
+      hasBearer,
+      tokenLength: token.length,
+      configuredProjectId: PROJECT_ID,
+      adminProjectId: adminApp.options?.projectId || ""
     });
     authDebug(req, "returning_401", {
       reason: "401_TOKEN_INVALID",
       verifyCode: error.code || "",
-      verifyMessage: error.message || ""
+      verifyMessage: error.message || "",
+      verifyStack: error.stack || ""
     });
     throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
   }
   if (!decoded.uid) {
-    authDebug(req, "returning_401", { reason: "401_USER_NOT_FOUND", detail: "decoded_uid_missing" });
-    throw Object.assign(new Error("401_USER_NOT_FOUND"), { status: 401 });
+    authDebug(req, "returning_401", { reason: "401_TOKEN_INVALID", detail: "decoded_uid_missing" });
+    throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
   }
   if (decoded.aud && decoded.aud !== PROJECT_ID) {
     logger.warn("Token Firebase de projeto diferente no checkout Asaas", {
@@ -173,30 +186,30 @@ async function authenticateCompany(req) {
     throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
   }
   try {
-    const userRecord = await getAuth().getUser(decoded.uid);
+    const userRecord = await getAuth(adminApp).getUser(decoded.uid);
     authDebug(req, "auth_user_lookup_success", {
       uid: userRecord.uid,
       email: userRecord.email || "",
       disabled: Boolean(userRecord.disabled)
     });
     if (userRecord.disabled) {
-      authDebug(req, "returning_401", { reason: "401_USER_NOT_FOUND", detail: "user_disabled", uid: decoded.uid });
-      throw Object.assign(new Error("401_USER_NOT_FOUND"), { status: 401 });
+      authDebug(req, "returning_401", { reason: "401_TOKEN_INVALID", detail: "user_disabled", uid: decoded.uid });
+      throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
     }
   } catch (error) {
-    if (error.message === "401_USER_NOT_FOUND") throw error;
+    if (error.message === "401_TOKEN_INVALID") throw error;
     logger.warn("Usuario Firebase Auth nao encontrado no checkout Asaas", {
       uid: decoded.uid,
       code: error.code || "",
       message: error.message || ""
     });
     authDebug(req, "returning_401", {
-      reason: "401_USER_NOT_FOUND",
+      reason: "401_TOKEN_INVALID",
       uid: decoded.uid,
       lookupCode: error.code || "",
       lookupMessage: error.message || ""
     });
-    throw Object.assign(new Error("401_USER_NOT_FOUND"), { status: 401 });
+    throw Object.assign(new Error("401_TOKEN_INVALID"), { status: 401 });
   }
   authDebug(req, "auth_uid_found", { uid: decoded.uid, email: decoded.email || "" });
   return decoded;
@@ -227,7 +240,7 @@ async function getCatalogCheckoutItem(itemCode) {
 async function reserveCheckout(companyRef, planCode) {
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(companyRef);
-    if (!snapshot.exists) throw Object.assign(new Error("401_COMPANY_NOT_FOUND"), { status: 401 });
+    if (!snapshot.exists) throw Object.assign(new Error("403_COMPANY_NOT_FOUND"), { status: 403 });
     const company = snapshot.data();
     const lockAt = company.billingCheckoutLockedAt?.toDate?.();
     if (lockAt && Date.now() - lockAt.getTime() < CHECKOUT_LOCK_MINUTES * 60 * 1000) {
@@ -315,7 +328,7 @@ exports.createAsaasCheckout = onRequest({
   try {
     const auth = await authenticateCompany(req);
     const planCode = normalizePlanCode(req.body?.planCode || req.body?.itemCode || req.body?.serviceCode);
-    if (!planCode) return sendError(res, 400, "PLAN_CODE_REQUIRED", "Informe o plano ou serviÃ§o.");
+    if (!planCode) return sendError(res, 400, "PLAN_CODE_REQUIRED", "Informe o plano ou serviço.");
 
     companyRef = db.collection("companies").doc(auth.uid);
     authDebug(req, "company_lookup_start", { uid: auth.uid, planCode });
@@ -326,8 +339,8 @@ exports.createAsaasCheckout = onRequest({
       planCode
     });
     if (!companySnapshot.exists) {
-      authDebug(req, "returning_401", { reason: "401_COMPANY_NOT_FOUND", uid: auth.uid });
-      throw Object.assign(new Error("401_COMPANY_NOT_FOUND"), { status: 401 });
+      authDebug(req, "returning_403", { reason: "403_COMPANY_NOT_FOUND", uid: auth.uid });
+      throw Object.assign(new Error("403_COMPANY_NOT_FOUND"), { status: 403 });
     }
     await reserveCheckout(companyRef, planCode);
     const [item, billingSnapshot] = await Promise.all([
@@ -342,7 +355,12 @@ exports.createAsaasCheckout = onRequest({
       itemKind,
       itemType: item.type || ""
     });
-    const company = { uid: auth.uid, ...companySnapshot.data() };
+    const companyData = companySnapshot.data() || {};
+    if (companyData.uid && companyData.uid !== auth.uid) {
+      authDebug(req, "returning_403", { reason: "403_COMPANY_NOT_ALLOWED", uid: auth.uid, companyUid: companyData.uid });
+      throw Object.assign(new Error("403_COMPANY_NOT_ALLOWED"), { status: 403 });
+    }
+    const company = { uid: auth.uid, ...companyData };
     const billing = billingSnapshot.exists ? billingSnapshot.data() : {};
     const client = createAsaasClient({
       apiKey: asaasApiKey.value(),
@@ -473,8 +491,8 @@ exports.createAsaasCheckout = onRequest({
     });
     if (companyRef) await releaseCheckout(companyRef, error.message).catch(() => {});
     const status = Number(error.status) || (error.code?.startsWith("auth/") ? 401 : 500);
-    if (status === 401) {
-      authDebug(req, "returning_401", {
+    if (status === 401 || status === 403) {
+      authDebug(req, status === 401 ? "returning_401" : "returning_403", {
         reason: error.message || "AUTH_UNKNOWN",
         status
       });
@@ -488,8 +506,8 @@ exports.createAsaasCheckout = onRequest({
       PLAN_PRICE_INVALID: "Preço do plano inválido.",
       "401_TOKEN_MISSING": "401_TOKEN_MISSING",
       "401_TOKEN_INVALID": "401_TOKEN_INVALID",
-      "401_USER_NOT_FOUND": "401_USER_NOT_FOUND",
-      "401_COMPANY_NOT_FOUND": "401_COMPANY_NOT_FOUND",
+      "403_COMPANY_NOT_FOUND": "403_COMPANY_NOT_FOUND",
+      "403_COMPANY_NOT_ALLOWED": "403_COMPANY_NOT_ALLOWED",
       CHECKOUT_IN_PROGRESS: "Já existe uma contratação em andamento."
     };
     return sendError(res, status, error.message || "CHECKOUT_FAILED",
@@ -611,14 +629,14 @@ exports.asaasWebhook = onRequest({
           companyUid: companyDoc.id,
           empresa: company.empresa || company.nome || "Empresa",
           contactEmail: company.email || company.authEmail || "",
-          tipo: history.planName || "ServiÃ§o avulso",
+          tipo: history.planName || "Serviço avulso",
           serviceCode: history.planCode || "",
           servicePrice: Number(history.contractedPlanPrice || amount),
           servicePermissions: permissions,
           candidateId: serviceContext.candidateId || "",
           candidateName: serviceContext.candidateName || "",
           candidateEmail: serviceContext.candidateEmail || "",
-          mensagem: serviceContext.message || `ServiÃ§o avulso confirmado pelo Asaas: ${history.planName || payment.description || ""}`,
+          mensagem: serviceContext.message || `Serviço avulso confirmado pelo Asaas: ${history.planName || payment.description || ""}`,
           status: "Pagamento confirmado",
           deliveryStatus: "Contratado",
           paymentStatus: state.paymentStatus,
