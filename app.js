@@ -477,13 +477,36 @@ function resolveCheckoutEndpoint(endpoint, settings = getActiveBillingSettings()
 
 async function getAuthenticatedCompanyIdToken() {
   if (state.mode !== "cloud" || !state.auth) throw new Error("AUTH_REQUIRED");
-  const authUser = state.auth.currentUser;
+  const authUser = await waitForAuthUser();
   if (!authUser?.uid || typeof authUser.getIdToken !== "function") throw new Error("AUTH_REQUIRED");
   if (state.currentCompanyProfile?.uid && state.currentCompanyProfile.uid !== authUser.uid) {
     throw new Error("COMPANY_AUTH_MISMATCH");
   }
   state.currentCompanyUser = authUser;
   return authUser.getIdToken(true);
+}
+
+function waitForAuthUser(timeoutMs = 8000) {
+  if (state.auth?.currentUser) return Promise.resolve(state.auth.currentUser);
+  if (!state.auth) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe = () => {};
+    const finish = (user) => {
+      if (settled) return;
+      settled = true;
+      try { unsubscribe(); } catch {}
+      resolve(user || state.auth.currentUser || null);
+    };
+    const timer = setTimeout(() => finish(state.auth.currentUser || null), timeoutMs);
+    unsubscribe = onAuthStateChanged(state.auth, (user) => {
+      clearTimeout(timer);
+      finish(user);
+    }, () => {
+      clearTimeout(timer);
+      finish(null);
+    });
+  });
 }
 
 

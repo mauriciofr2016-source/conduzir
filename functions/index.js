@@ -28,6 +28,7 @@ const asaasEnvironment = defineString("ASAAS_ENV", { default: "sandbox" });
 const asaasBillingType = defineString("ASAAS_BILLING_TYPE", { default: "UNDEFINED" });
 const REGION = "southamerica-east1";
 const CHECKOUT_LOCK_MINUTES = 3;
+const PROJECT_ID = "bancotalentoserika";
 const ALLOWED_ORIGINS = new Set([
   "https://mauriciofr2016-source.github.io",
   "https://bancotalentoserika.web.app",
@@ -62,11 +63,30 @@ async function findCatalogPlanByCode(code) {
 }
 
 async function authenticateCompany(req) {
-  const authorization = `${req.get("authorization") || ""}`;
+  const authorization = `${req.get("authorization") || req.get("Authorization") || ""}`;
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match?.[1]) throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
-  const decoded = await getAuth().verifyIdToken(match[1], true);
+  let decoded;
+  try {
+    decoded = await getAuth().verifyIdToken(match[1], true);
+  } catch (error) {
+    logger.warn("Token Firebase invalido no checkout Asaas", {
+      code: error.code,
+      message: error.message,
+      origin: req.get("origin") || "",
+      hasAuthorizationHeader: Boolean(authorization)
+    });
+    throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
+  }
   if (!decoded.uid) throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
+  if (decoded.aud && decoded.aud !== PROJECT_ID) {
+    logger.warn("Token Firebase de projeto diferente no checkout Asaas", {
+      aud: decoded.aud,
+      expected: PROJECT_ID,
+      uid: decoded.uid
+    });
+    throw Object.assign(new Error("AUTH_REQUIRED"), { status: 401 });
+  }
   return decoded;
 }
 
@@ -153,6 +173,7 @@ async function findFirstSubscriptionPayment(client, subscriptionId) {
 
 exports.createAsaasCheckout = onRequest({
   region: REGION,
+  invoker: "public",
   secrets: [asaasApiKey],
   timeoutSeconds: 60,
   memory: "256MiB"
