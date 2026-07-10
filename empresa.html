@@ -24,11 +24,11 @@
       <section class="card">
         <div class="auth-shell-head">
           <div>
-            <span class="section-tag">Área empresarial com acesso por plano</span>
+            <span class="section-tag">Recrutamento para empresas</span>
             <h1>Empresa</h1>
-            <p class="auth-shell-copy">A empresa cria o próprio acesso com e-mail, usuário e senha. Após o login, contrata o plano mensal para liberar o banco de currículos e pode contratar serviços avulsos que chegam automaticamente para a consultora.</p>
+            <p class="auth-shell-copy">Acesse planos, divulgue oportunidades e encontre profissionais avaliados com olhar técnico, comportamental e alinhado à cultura da sua organização.</p>
           </div>
-          <div class="badge">Acesso empresarial • <span data-runtime-mode>Modo local</span></div>
+          <div class="badge">Acesso empresarial • <span data-runtime-mode>Acesso ativo</span></div>
         </div>
         <div class="auth-grid">
           <article class="card nested-card auth-card">
@@ -77,7 +77,7 @@
       </aside>
       <section class="dashboard-content">
         <div class="panel card active" id="tab-planos">
-          <div class="panel-head"><div><span class="section-tag">Liberação por plano</span><h1>Plano e acesso da empresa</h1></div><div class="badge"><span id="companyPlanBadge">Sem plano ativo</span></div></div>
+          <div class="panel-head"><div><span class="section-tag">Contratação empresarial</span><h1>Plano e acesso da empresa</h1></div><div class="badge"><span id="companyPlanBadge">Sem plano ativo</span></div></div>
           <h2>Planos mensais</h2>
           <div class="cards-grid three" id="companyPlanCards"></div>
           <h2 class="top-gap">Serviços avulsos</h2>
@@ -88,17 +88,17 @@
               <article class="mini-card"><strong id="companyCurrentPlan">Nenhum</strong><p>Plano atual</p></article>
               <article class="mini-card"><strong id="companyContractedPlanPrice">Nenhum</strong><p>Valor contratado</p></article>
               <article class="mini-card"><strong id="companyPaymentStatus">Pendente</strong><p>Status comercial</p></article>
-              <article class="mini-card"><strong id="companyAccessStatus">Bloqueado</strong><p>Acesso ao banco de curriculos</p></article>
+              <article class="mini-card"><strong id="companyAccessStatus">Bloqueado</strong><p>Acesso ao banco de currículos</p></article>
             </div>
             <p class="muted-note top-gap" id="companyContractedPlanMeta">Valor travado no momento da assinatura</p>
             <div class="cards-grid two top-gap" id="companyBillingSettingsCards"></div>
-            <p class="muted-note top-gap" id="companyBillingArchitectureNote">Cobran&ccedil;a Asaas integrada via backend seguro e webhook. O valor contratado fica travado para a assinatura atual.</p>
+            <p class="muted-note top-gap" id="companyBillingArchitectureNote">A cobrança é processada pelo Asaas. O valor contratado permanece registrado para a assinatura atual.</p>
             <div id="companyPaymentSessionNotice" class="muted-note top-gap"></div>
           </div>
         </div>
 
         <div class="panel card" id="tab-vagas">
-          <div class="panel-head"><div><span class="section-tag">Cadastro e login com plano contratado</span><h1>Minhas Vagas</h1></div><div class="badge">Plano empresarial • <span data-runtime-mode>Modo local</span></div></div>
+          <div class="panel-head"><div><span class="section-tag">Oportunidades da empresa</span><h1>Minhas Vagas</h1></div><div class="badge">Plano empresarial • <span data-runtime-mode>Acesso ativo</span></div></div>
           <table class="table">
             <thead><tr><th>Vaga</th><th>Área</th><th>Modelo</th><th>Status</th></tr></thead>
             <tbody id="jobsTable"><tr><td>Analista de RH</td><td>Recursos Humanos</td><td>Presencial</td><td>Aberta</td></tr></tbody>
@@ -118,7 +118,7 @@
         </div>
 
         <div class="panel card" id="tab-candidatos">
-          <div class="panel-head"><div><span class="section-tag">Pesquisa de candidatos por área, perfil ou região</span><h2>Banco de Currículos</h2></div></div>
+          <div class="panel-head"><div><span class="section-tag">Pesquisa por área, perfil ou região</span><h2>Banco de Currículos</h2></div></div>
           <div id="companyLockedNotice" class="inline-success is-info">Contrate um plano mensal para liberar o acesso ao banco de currículos.</div>
           <div class="card nested-card">
             <div class="filter-grid">
@@ -131,7 +131,7 @@
         </div>
 
         <div class="panel card" id="tab-contato">
-          <div class="panel-head"><div><span class="section-tag">Acompanhamento</span><h2>Serviços solicitados e concluídos</h2><p>Os serviços adicionais agora são contratados dentro do currículo específico. Assim a consultora sabe exatamente qual empresa, candidato e serviço estão vinculados.</p></div></div>
+          <div class="panel-head"><div><span class="section-tag">Acompanhamento</span><h2>Serviços solicitados e concluídos</h2><p>Serviços adicionais podem ser vinculados a um candidato específico, facilitando a condução da consultoria e o acompanhamento da empresa.</p></div></div>
           <div class="inline-success is-info">Abra o Banco de Currículos, escolha um candidato validado e contrate os serviços disponíveis abaixo do perfil.</div>
           <div id="companyRequestsList" class="stack-list top-gap"></div>
         </div>
@@ -139,7 +139,7 @@
         <div class="panel card" id="tab-relatorios">
           <div class="panel-head"><div><span class="section-tag">Relatórios</span><h2>Visualização estratégica</h2></div></div>
           <div class="cards-grid three">
-            <article class="mini-card"><strong>Perfis ativos</strong><p id="metricCandidates">0 candidatos cadastrados localmente.</p></article>
+            <article class="mini-card"><strong>Perfis ativos</strong><p id="metricCandidates">0 candidatos em acompanhamento.</p></article>
             <article class="mini-card"><strong>Vagas abertas</strong><p id="metricJobs">0 vagas registradas.</p></article>
             <article class="mini-card"><strong>Aderência cultural</strong><p>Análise qualitativa conduzida pela consultoria.</p></article>
           </div>
@@ -161,11 +161,11 @@
     <div class="help-modal-backdrop" data-help-close></div>
     <div class="help-modal-card card">
       <div class="panel-head compact-head">
-        <div><span class="section-tag">Central de ajuda</span><h2>Dúvidas da empresa</h2><p>Passo a passo rápido para usar o site. Se ainda assim não resolver, fale com o suporte.</p></div>
+        <div><span class="section-tag">Central de ajuda</span><h2>Dúvidas da empresa</h2><p>Orientações rápidas para contratar planos, acessar candidatos e acompanhar serviços com a Conduzir.</p></div>
         <button class="btn btn-secondary" type="button" data-help-close>Fechar</button>
       </div>
       <div class="help-faq-list">
-        <details open><summary>Como criar a conta da empresa?</summary><p>Na aba Empresa, preencha nome da empresa, e-mail, login, senha, telefone e CNPJ. Depois clique em <strong>Criar acesso empresarial</strong>.</p></details><details><summary>Como contratar um plano?</summary><p>Depois do login, abra <strong>Plano e acesso</strong> e clique no plano desejado. A cobran&ccedil;a ser&aacute; criada no Asaas e o acesso ser&aacute; liberado automaticamente ap&oacute;s a confirma&ccedil;&atilde;o do pagamento.</p></details><details><summary>Como acessar o banco de currículos?</summary><p>Entre com sua conta, ative um plano e depois abra a aba <strong>Banco de Currículos</strong>. Sem plano ativo, o acesso permanece bloqueado.</p></details><details><summary>Esqueci meu login ou senha. O que faço?</summary><p>Entre em contato pelo WhatsApp abaixo informando o nome da empresa e o e-mail cadastrado. O administrador poderá localizar seu cadastro e enviar redefinição de senha.</p></details>
+        <details open><summary>Como criar a conta da empresa?</summary><p>Preencha nome da empresa, e-mail, login, senha, telefone e CNPJ. Depois clique em <strong>Criar acesso empresarial</strong>.</p></details><details><summary>Como contratar um plano?</summary><p>Depois do login, abra <strong>Plano e acesso</strong> e clique no plano desejado. A cobrança será criada no Asaas e o acesso será liberado após a confirmação do pagamento.</p></details><details><summary>Como acessar o banco de currículos?</summary><p>Entre com sua conta, ative um plano e depois abra a aba <strong>Banco de Currículos</strong>. Sem plano ativo, o acesso permanece bloqueado.</p></details><details><summary>Esqueci meu login ou senha. O que faço?</summary><p>Entre em contato pelo WhatsApp abaixo informando o nome da empresa e o e-mail cadastrado. A equipe poderá orientar a recuperação do acesso.</p></details>
       </div>
       <div class="form-actions top-gap"><a class="btn btn-primary" href="https://wa.me/5500000000000" target="_blank" rel="noopener">Falar com suporte no WhatsApp</a></div>
     </div>
@@ -177,6 +177,6 @@
     <span>Suporte/NR1</span>
   </a>
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=20260710-textos"></script>
 </body>
 </html>

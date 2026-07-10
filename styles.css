@@ -82,6 +82,7 @@ button, input, textarea, select { font: inherit; }
 .hero h1 { font-size: clamp(2.3rem, 5vw, 4.2rem); line-height: 1.04; margin: 16px 0; }
 .lead { font-size: 1.07rem; line-height: 1.7; color: var(--muted); max-width: 760px; }
 .hero-actions, .form-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+.hero .hero-actions { margin-top: 20px; }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 13px 18px; border-radius: 14px; font-weight: 700; border: 1px solid transparent; cursor: pointer;

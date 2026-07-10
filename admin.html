@@ -24,11 +24,11 @@
       <section class="card">
         <div class="auth-shell-head">
           <div>
-            <span class="section-tag">Acesso criado pelo próprio sistema</span>
+            <span class="section-tag">Acesso administrativo</span>
             <h1>Administrador</h1>
-            <p class="auth-shell-copy">O administrador entra apenas com o acesso mestre único do sistema. Esse acesso usa Firebase Authentication, não grava senha em texto no banco e é o único autorizado a abrir a aba administrativa.</p>
+            <p class="auth-shell-copy">A área administrativa é reservada à gestão da Conduzir, com acesso exclusivo para acompanhar cadastros, planos, serviços e relatórios.</p>
           </div>
-          <div class="badge">Controle total • <span data-runtime-mode>Modo local</span></div>
+          <div class="badge">Controle total • <span data-runtime-mode>Acesso ativo</span></div>
         </div>
         <div id="adminBootstrapArea" class="card nested-card is-hidden">
           <div class="panel-head compact-head"><div><span class="section-tag">Primeiro acesso</span><h2>Criar administrador mestre único</h2><p>Este será o único usuário autorizado a acessar a aba admin.</p></div></div>
@@ -74,7 +74,7 @@
       </aside>
       <section class="dashboard-content">
         <div class="panel card active" id="tab-painel">
-          <div class="panel-head"><div><span class="section-tag">Acesso total</span><h1>Painel Geral</h1></div><div class="badge">Gestão completa • <span data-runtime-mode>Modo local</span></div></div>
+          <div class="panel-head"><div><span class="section-tag">Acesso total</span><h1>Painel Geral</h1></div><div class="badge">Gestão completa • <span data-runtime-mode>Acesso ativo</span></div></div>
           <div class="cards-grid stats-grid">
             <article class="mini-card"><strong id="adminCandidateCount">0</strong><p>Candidatos</p></article>
             <article class="mini-card"><strong id="adminUserCount">0</strong><p>Usuários do sistema</p></article>
@@ -142,27 +142,27 @@
               <button type="button" class="filter-chip" data-management-scope="empresas">Empresas</button>
               <button type="button" class="filter-chip" data-management-scope="candidatos">Candidatos</button>
             </div>
-            <div class="inline-success is-info admin-inline-note">A consultora entra com usuário e senha. O sistema gera um e-mail técnico interno apenas para o Firebase Auth; ele não aparece para a consultora.</div>
+            <div class="inline-success is-info admin-inline-note">A consultora entra com usuário e senha definidos pela administração. O e-mail técnico interno não aparece para a consultora.</div>
             <div id="adminManagedAccountsList" class="stack-list"></div>
           </div>
         </div>
 
         <div class="panel card" id="tab-planos">
-          <div class="panel-head"><div><span class="section-tag">Planos, serviços e billing</span><h2>Planos e Serviços</h2><p>O administrador pode cadastrar, editar, ativar, inativar e excluir planos e serviços. Essa estrutura já alimenta automaticamente a área da empresa e prepara o sistema para Asaas com backend seguro. Altera&ccedil;&otilde;es de pre&ccedil;o afetam apenas novas assinaturas.</p></div></div>
+          <div class="panel-head"><div><span class="section-tag">Planos, serviços e cobrança</span><h2>Planos e Serviços</h2><p>Cadastre, edite, ative, inative ou exclua planos e serviços com segurança. Alterações de preço afetam apenas novas assinaturas.</p></div></div>
           <div id="adminCatalogNoticeHost"></div>
           <div class="cards-grid three" id="adminBillingArchitectureStatus"></div>
           <div class="cards-grid two top-gap">
             <div class="card nested-card">
               <div class="panel-head compact-head">
                 <div><span class="section-tag">Gateway e assinatura</span><h3>Configuração profissional de cobrança</h3></div>
-                <div class="badge">Pagamento + webhook</div>
+                <div class="badge">Pagamento Asaas</div>
               </div>
               <form id="adminBillingSettingsForm" class="form-grid">
                 <label><span>Gateway principal</span><select name="provider"><option value="asaas">Asaas</option></select></label>
                 <label><span>Modo do pagamento</span><select name="checkoutMode"><option value="request_only">Registrar interesse comercial</option><option value="hosted_api">Endpoint seguro do Asaas</option></select></label>
                 <label><span>URL base pública</span><input type="url" name="publicBaseUrl" placeholder="Ex.: https://seudominio.com" /></label>
                 <label><span>Endpoint criar pagamento</span><input type="text" name="createCheckoutEndpoint" placeholder="/api/asaas/checkout" /></label>
-                <label><span>Webhook esperado</span><input type="text" name="webhookEndpoint" placeholder="/api/asaas/webhook" /></label>
+                <label><span>Retorno de pagamento Asaas</span><input type="text" name="webhookEndpoint" placeholder="/api/asaas/webhook" /></label>
                 <label><span>URL de sucesso</span><input type="url" name="successUrl" placeholder="Ex.: https://seudominio.com/empresa.html?pagamento=sucesso" /></label>
                 <label><span>URL de cancelamento</span><input type="url" name="cancelUrl" placeholder="Ex.: https://seudominio.com/empresa.html?pagamento=cancelado" /></label>
                 <label><span>Moeda padrão</span><select name="defaultCurrency"><option value="brl">BRL</option><option value="usd">USD</option></select></label>
@@ -203,11 +203,11 @@
               </form>
             </div>
             <div class="card nested-card">
-              <div class="panel-head compact-head"><div><span class="section-tag">Arquitetura profissional</span><h3>Próxima etapa financeira</h3></div></div>
+              <div class="panel-head compact-head"><div><span class="section-tag">Cobrança profissional</span><h3>Rotina financeira</h3></div></div>
               <div class="stack-list">
-                <article class="mini-card"><strong>Asaas</strong><p>Integra&ccedil;&atilde;o via Firebase Functions para criar clientes, assinaturas e cobran&ccedil;as, validar webhook, tratar inadimpl&ecirc;ncia e atualizar a empresa. A API Key do Asaas fica somente nas Functions.</p></article>
+                <article class="mini-card"><strong>Asaas</strong><p>Cobranças, assinaturas e atualizações de pagamento são conduzidas pelo Asaas para apoiar a gestão comercial da empresa.</p></article>
                 <article class="mini-card"><strong>Regra de pre&ccedil;o dos planos</strong><p>Altera&ccedil;&otilde;es de pre&ccedil;o afetam apenas novas assinaturas. Assinantes atuais mant&ecirc;m o valor contratado at&eacute; uma a&ccedil;&atilde;o manual espec&iacute;fica de reajuste.</p></article>
-                <article class="mini-card"><strong>Atualiza&ccedil;&atilde;o autom&aacute;tica</strong><p>O webhook muda o status comercial para ativo, pendente, vencido, reembolsado ou chargeback conforme a situa&ccedil;&atilde;o real da cobran&ccedil;a.</p></article>
+                <article class="mini-card"><strong>Atualiza&ccedil;&atilde;o de status</strong><p>O status comercial acompanha a situa&ccedil;&atilde;o real da cobran&ccedil;a: ativo, pendente, vencido, reembolsado ou em contesta&ccedil;&atilde;o.</p></article>
               </div>
             </div>
           </div>
@@ -238,7 +238,7 @@
               <h2>Editar números de suporte / NR1 / link Google Meet</h2>
               <p>Centralize aqui os contatos e instruções que aparecem automaticamente para empresa, consultora e candidato.</p>
             </div>
-            <div class="badge">Salvamento no Firebase</div>
+            <div class="badge">Atualização de atendimento</div>
           </div>
           <div id="adminSupportSettingsNoticeHost"></div>
           <div class="cards-grid two">
@@ -329,6 +329,6 @@
     </div>
   </main>
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js?v=20260710-textos"></script>
 </body>
 </html>

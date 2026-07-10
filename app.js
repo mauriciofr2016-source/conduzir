@@ -156,7 +156,7 @@ const defaultCatalogItems = [
     permissions: { curriculumAccess: true, selfServiceHiring: true, consultancy: false, managedRecruitment: false, nr1: false, reports: false },
     featured: false,
     sortOrder: 1,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   },
   {
     code: "candidato-destaque-profissional",
@@ -172,7 +172,7 @@ const defaultCatalogItems = [
     permissions: { curriculumAccess: true, selfServiceHiring: true, consultancy: true, managedRecruitment: false, nr1: false, reports: true },
     featured: true,
     sortOrder: 2,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   },
   {
     code: "candidato-destaque-completo",
@@ -188,7 +188,7 @@ const defaultCatalogItems = [
     permissions: { curriculumAccess: true, selfServiceHiring: true, consultancy: true, managedRecruitment: true, nr1: true, reports: true },
     featured: false,
     sortOrder: 3,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   },
   {
     code: "plano-essencial",
@@ -202,7 +202,7 @@ const defaultCatalogItems = [
     active: true,
     featured: false,
     sortOrder: 1,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   },
   {
     code: "plano-profissional",
@@ -216,7 +216,7 @@ const defaultCatalogItems = [
     active: true,
     featured: true,
     sortOrder: 2,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   },
   {
     code: "plano-premium",
@@ -230,7 +230,7 @@ const defaultCatalogItems = [
     active: true,
     featured: false,
     sortOrder: 3,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   },
   {
     code: "servico-recrutamento",
@@ -246,7 +246,7 @@ const defaultCatalogItems = [
     permissions: { curriculumAccess: false, selfServiceHiring: false, consultancy: false, managedRecruitment: true, nr1: false, reports: true },
     featured: true,
     sortOrder: 4,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   },
   {
     code: "servico-engenharia-cargo",
@@ -262,7 +262,7 @@ const defaultCatalogItems = [
     permissions: { curriculumAccess: false, selfServiceHiring: false, consultancy: true, managedRecruitment: false, nr1: false, reports: true },
     featured: false,
     sortOrder: 5,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   },
   {
     code: "servico-nr1",
@@ -278,7 +278,7 @@ const defaultCatalogItems = [
     permissions: { curriculumAccess: false, selfServiceHiring: false, consultancy: true, managedRecruitment: false, nr1: true, reports: true },
     featured: false,
     sortOrder: 6,
-    createdAt: "Padrão do sistema"
+    createdAt: "Cadastro inicial"
   }
 ];
 
@@ -299,8 +299,8 @@ const defaultBillingSettings = [{
   defaultCurrency: "brl",
   trialDays: 0,
   active: true,
-  notes: "Base pronta para cobrança recorrente profissional com backend seguro.",
-  createdAt: "Padrão do sistema"
+  notes: "Cobrança recorrente preparada para atendimento empresarial.",
+  createdAt: "Cadastro inicial"
 }];
 
 
@@ -441,6 +441,10 @@ function normalizePriceInput(value) {
     .replace(/[^0-9.\-]/g, "");
   const parsed = Number(sanitized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isPermissionError(error) {
+  return `${error?.code || error?.message || ""}`.toLowerCase().includes("permission");
 }
 
 function normalizeCatalogBillingCycle(type, value) {
@@ -1319,7 +1323,8 @@ async function cleanupLegacyCloudSensitiveData() {
       .map((item) => updateDoc(doc(state.firestore, COLLECTIONS.systemUsers, item.id), { senha: deleteField(), updatedAt: serverTimestamp() }));
     if (tasks.length) await Promise.all(tasks);
   } catch (error) {
-    console.error("Não foi possível limpar senhas antigas da nuvem:", error);
+    if (isPermissionError(error)) console.warn("Rotina restrita à administração não executada nesta área.");
+    else console.error("Não foi possível concluir a limpeza administrativa:", error);
   }
 }
 
@@ -1331,13 +1336,12 @@ async function setupCloudMode() {
     state.firestore = getFirestore(app);
     state.auth = getAuth(app);
     state.mode = "cloud";
-    showGlobalNotice("Versão ativa: dados salvos na nuvem com Firebase.");
     await cleanupLegacyCloudSensitiveData();
     bindRealtimeCollections();
   } catch (error) {
-    console.error("Erro ao iniciar Firebase:", error);
+    console.error("Não foi possível iniciar o ambiente de cadastros:", error);
     state.mode = "local";
-    showGlobalNotice("Firebase não iniciou. O site entrou em modo local para não quebrar a base.");
+    showGlobalNotice("Não foi possível carregar o ambiente de cadastros agora. Tente novamente em instantes.");
   }
 }
 
@@ -1349,7 +1353,8 @@ function bindCollection(name, renderer, fallback) {
       renderer(state[name]);
     },
     (error) => {
-      console.error(`Erro ao ler ${name}:`, error);
+      if (isPermissionError(error)) console.warn(`Leitura restrita para ${name}; usando dados disponíveis na página.`);
+      else console.error(`Erro ao ler ${name}:`, error);
       fallback();
     }
   );
@@ -1579,7 +1584,7 @@ function renderCompanyCatalogSections() {
         <p class="muted-note top-gap"><strong>Gateway preparado:</strong> ${escapeHtml(item.gateway || getBillingProviderLabel(getActiveBillingSettings().provider))}</p>
         <button class="btn btn-primary top-gap" type="button" data-plan-contract="${escapeHtml(getCatalogItemId(item))}">${escapeHtml(getPublicCheckoutLabel())}</button>
       </article>
-    `).join("") : '<article class="mini-card"><strong>Nenhum plano ativo</strong><p>O administrador ainda não publicou planos nesta versão.</p></article>' ;
+    `).join("") : '<article class="mini-card"><strong>Nenhum plano ativo</strong><p>A Conduzir ainda não publicou planos para contratação.</p></article>' ;
   }
 
   if (serviceSelect) {
@@ -2398,7 +2403,7 @@ function ensureRescheduleInterviewModal() {
         <div>
           <span class="section-tag">Reagendar entrevista</span>
           <h3 id="rescheduleModalTitle">Nova data e horário</h3>
-          <p class="muted-text">O sistema mantém automaticamente candidato, empresa, e-mail, link do Meet e demais dados da entrevista original.</p>
+          <p class="muted-text">Os dados da entrevista original serão preservados para manter o acompanhamento organizado.</p>
         </div>
         <button class="btn btn-secondary btn-small" type="button" data-close-reschedule-modal="true">Fechar</button>
       </div>
@@ -2680,7 +2685,7 @@ function renderCandidateViews(data) {
   }
 
   const metricCandidates = document.getElementById("metricCandidates");
-  if (metricCandidates) metricCandidates.textContent = state.mode === "cloud" ? `${state.candidates.length} candidato(s) salvos na nuvem.` : `${state.candidates.length} candidato(s) cadastrados localmente.`;
+  if (metricCandidates) metricCandidates.textContent = `${state.candidates.length} candidato(s) em acompanhamento.`;
   const adminCandidateCount = document.getElementById("adminCandidateCount");
   const reportCandidates = document.getElementById("reportCandidates");
   const companyReportCandidates = document.getElementById("companyReportCandidates");
@@ -2946,7 +2951,7 @@ function renderAdminManagedAccounts() {
   const items = getManagedRecordsByScope(scope).filter((item) => matchesManagementSearch(item, scope, term));
   document.querySelectorAll("[data-management-scope]").forEach((button) => button.classList.toggle("active", button.dataset.managementScope === scope));
   if (!items.length) {
-    list.innerHTML = '<article class="mini-card"><strong>Nenhum cadastro encontrado</strong><p>Ajuste o filtro ou aguarde novos registros entrarem no sistema.</p></article>';
+    list.innerHTML = '<article class="mini-card"><strong>Nenhum cadastro encontrado</strong><p>Ajuste o filtro ou aguarde novos registros de candidatos e empresas.</p></article>';
     return;
   }
   list.innerHTML = items.map((item) => {
@@ -3083,7 +3088,7 @@ function renderCandidateTests() {
   const totalFeedbacks = scopedFeedbacks.length;
   grid.innerHTML = `
     <article class="mini-card"><strong>Perfil comportamental</strong><p>Status: ${disc ? "DISC preenchido e disponível para análise" : "disponível para preenchimento"}.</p></article>
-    <article class="mini-card"><strong>Avaliação psicossocial</strong><p>Status: ${totalFeedbacks > 1 ? "há registros no sistema" : "em triagem"}.</p></article>
+    <article class="mini-card"><strong>Avaliação psicossocial</strong><p>Status: ${totalFeedbacks > 1 ? "há registros de acompanhamento" : "em triagem"}.</p></article>
     <article class="mini-card"><strong>Teste técnico</strong><p>Status: ${totalFeedbacks ? "acompanhe atualizações no parecer da consultora" : "ainda não solicitado"}.</p></article>`;
   const discHost = document.getElementById("candidateDiscResult");
   if (discHost) {
@@ -3122,7 +3127,7 @@ function renderCandidateStatus() {
       <strong>Status atual: ${escapeHtml(status)}</strong>
       <span>${escapeHtml(getCandidateStatusMessage(status))}</span>
     </div>
-    <div class="timeline-item done"><strong>Cadastro realizado</strong><span>${scopedCandidates.length || state.currentCandidateProfile ? "Perfil individual salvo no sistema." : "Preencha e salve seu perfil para ativar sua área individual."}</span></div>
+    <div class="timeline-item done"><strong>Cadastro realizado</strong><span>${scopedCandidates.length || state.currentCandidateProfile ? "Perfil profissional salvo para acompanhamento." : "Preencha e salve seu perfil para iniciar seu acompanhamento."}</span></div>
     <div class="timeline-item ${status.toLowerCase().includes("análise") || scopedFeedbacks.length ? "done" : ""}"><strong>Em análise</strong><span>${scopedFeedbacks.length ? "Há pareceres ou avaliações vinculados ao seu login." : "Aguardando análise da consultoria."}</span></div>
     <div class="timeline-item ${status.toLowerCase().includes("avalia") || scopedInterviews.length ? "done" : ""}"><strong>Em avaliação / entrevista</strong><span>${scopedInterviews.length ? "Existe entrevista ou acompanhamento registrado para você." : "A consultora atualizará esta etapa quando houver entrevista ou teste."}</span></div>
     <div class="timeline-item ${validated ? "done" : ""}"><strong>Validado pela Conduzir</strong><span>${validated ? "Seu perfil está liberado para empresas contratantes." : "A validação depende exclusivamente da decisão da consultora."}</span></div>
@@ -3588,7 +3593,7 @@ function initCandidatePage() {
         : error?.code === "auth/weak-password"
         ? "A senha precisa ter pelo menos 6 caracteres."
         : error?.message === "AUTH_REQUIRED"
-        ? "O acesso seguro depende do Firebase ativo. Verifique a configuração antes de cadastrar."
+        ? "Não foi possível criar o acesso seguro agora. Tente novamente em instantes."
         : "Não foi possível criar o acesso agora. Tente novamente.";
       showCandidateAuthNotice(message, "error");
     } finally {
@@ -3618,7 +3623,7 @@ function initCandidatePage() {
         : error?.code === "auth/invalid-credential"
         ? "E-mail ou senha incorretos."
         : error?.message === "AUTH_REQUIRED"
-        ? "O login seguro depende do Firebase ativo. Verifique a configuração."
+        ? "Não foi possível acessar sua área agora. Tente novamente em instantes."
         : "Não foi possível entrar agora. Tente novamente.";
       showCandidateAuthNotice(message, "error");
     } finally {
@@ -3711,7 +3716,7 @@ async function readCandidateResumeFile(form) {
       buttonCooldownTimer = setTimeout(() => setSubmitButtonState(false, "Salvar perfil"), 4000);
     } catch (error) {
       console.error("Erro ao salvar candidato:", error);
-      showCandidateMessage(error?.message === "CURRICULO_FILE_TOO_LARGE" ? "O currículo anexado está muito grande para salvar direto no Firestore. Use um PDF de até 700 KB nesta versão ou compacte o arquivo." : "Não foi possível salvar agora. Tente novamente.", "error");
+      showCandidateMessage(error?.message === "CURRICULO_FILE_TOO_LARGE" ? "O currículo anexado está muito grande. Use um arquivo de até 700 KB ou compacte o documento antes de enviar." : "Não foi possível salvar agora. Tente novamente.", "error");
       setSubmitButtonState(false, "Salvar perfil");
     } finally {
       isSubmitting = false;
@@ -3922,7 +3927,7 @@ function initJobPage() {
         : error?.message === "COMPANY_NOT_ALLOWED"
         ? "Este acesso não pertence à área da empresa."
         : error?.message === "AUTH_REQUIRED"
-        ? "O login seguro da empresa depende do Firebase ativo. Verifique a configuração."
+        ? "Não foi possível acessar a área da empresa agora. Tente novamente em instantes."
         : "E-mail ou senha incorretos.";
       showCompanyAuthNotice(message, "error");
     } finally {
@@ -4144,10 +4149,10 @@ function initFeedbackPage() {
         }
       }
       form.reset();
-      createNotice(state.mode === "cloud" ? "Parecer salvo com sucesso na nuvem." : "Parecer salvo com sucesso.", form.parentElement);
+      createNotice("Parecer salvo com sucesso.", form.parentElement);
     } catch (error) {
       console.error("Erro ao salvar parecer:", error);
-      createNotice("Não foi possível salvar o parecer agora. Confira o Firebase.", form.parentElement);
+      createNotice("Não foi possível salvar o parecer agora.", form.parentElement);
     }
   });
 
@@ -4274,9 +4279,9 @@ function initAdminUserManagement() {
   document.getElementById("adminBootstrapForm")?.addEventListener("submit", async (event) => { event.preventDefault(); const payload = Object.fromEntries(new FormData(event.target).entries()); try { await maybeCreateFirstAdmin(payload); createNotice("Administrador mestre criado com sucesso. Use o login fixo informado na tela para entrar.", event.target.parentElement); event.target.reset(); await hydrateInitialData(); bootstrapArea?.classList.add("is-hidden"); } catch (error) { console.error(error); createNotice(error.message === "ADMIN_ALREADY_EXISTS"
         ? "O administrador mestre já existe. Entre com o acesso fixo definido."
         : error.message === "AUTH_REQUIRED"
-          ? "O Firebase Auth precisa estar ativo para criar o administrador mestre."
+          ? "Não foi possível criar o administrador mestre agora. Tente novamente em instantes."
           : "Não foi possível criar o administrador mestre agora.", event.target.parentElement); } });
-  document.getElementById("systemLoginForm-admin")?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target).entries()); try { await loginSystemUser("Administrador", data); showSystemAuthNotice("Administrador", "Login realizado com sucesso."); } catch (error) { showSystemAuthNotice("Administrador", "Use somente o administrador mestre fixo do sistema. Se for o primeiro acesso, crie esse administrador no bloco acima.", "error"); } });
+  document.getElementById("systemLoginForm-admin")?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target).entries()); try { await loginSystemUser("Administrador", data); showSystemAuthNotice("Administrador", "Login realizado com sucesso."); } catch (error) { showSystemAuthNotice("Administrador", "Use somente o acesso mestre definido pela Conduzir. Se for o primeiro acesso, crie esse administrador no bloco acima.", "error"); } });
   document.getElementById("systemLogoutBtn-admin")?.addEventListener("click", async () => { await logoutSystemUser("Administrador"); showSystemAuthNotice("Administrador", "Você saiu da área administrativa.", "info"); });
   const form = document.getElementById("adminUserForm");
   if (!form) return;
@@ -4336,9 +4341,9 @@ function initAdminUserManagement() {
           : error.message === "LOGIN_AND_PASSWORD_REQUIRED" || error.message === "EMAIL_AND_PASSWORD_REQUIRED"
             ? "Informe usuário e senha para criar o acesso da consultora."
             : error.message === "AUTH_REQUIRED"
-              ? "O Firebase Auth precisa estar ativo para criar acessos seguros."
+              ? "Não foi possível criar o acesso seguro agora. Tente novamente em instantes."
               : error.message === "MASTER_ADMIN_EXISTS"
-                ? "O sistema aceita somente um administrador mestre. Cadastre consultoras abaixo e use o acesso fixo do admin para entrar."
+                ? "A Conduzir mantém apenas um administrador mestre. Cadastre consultoras abaixo e use o acesso fixo do admin para entrar."
                 : error?.code === "auth/weak-password"
                   ? "A senha da consultora precisa ter pelo menos 6 caracteres."
                   : "Não foi possível salvar a consultora agora. Confira o usuário e a senha.";
@@ -4534,7 +4539,8 @@ async function hydrateInitialData() {
     renderBillingSettings(billingSettings);
     renderPaymentSessions(paymentSessions);
   } catch (error) {
-    console.error("Erro ao carregar dados iniciais:", error);
+    if (isPermissionError(error)) console.warn("Alguns dados são restritos ao usuário logado; usando dados disponíveis na página.");
+    else console.error("Erro ao carregar dados iniciais:", error);
     fallbackCandidateRender();
     fallbackJobRender();
     fallbackFeedbackRender();
@@ -4551,7 +4557,7 @@ async function hydrateInitialData() {
 
 function injectRuntimeInfo() {
   document.querySelectorAll("[data-runtime-mode]").forEach((badge) => {
-    badge.textContent = state.mode === "cloud" ? "Modo nuvem" : "Modo local";
+    badge.textContent = "Acesso ativo";
   });
 }
 
@@ -4561,7 +4567,7 @@ async function init() {
   clearLegacySensitiveLocalData();
   sanitizeCompanyAuthContext();
   if (hasFirebaseConfig()) await setupCloudMode();
-  else { state.mode = "local"; showGlobalNotice("Versão pronta. Para salvar na nuvem, preencha o arquivo firebase-config.js."); }
+  else { state.mode = "local"; showGlobalNotice("Alguns recursos de cadastro podem estar temporariamente indisponíveis."); }
   injectRuntimeInfo();
   await hydrateInitialData();
   if (state.mode === "cloud" && state.auth && (isCandidatePage() || isCompanyPage())) {
