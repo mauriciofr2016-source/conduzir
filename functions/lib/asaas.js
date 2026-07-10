@@ -69,6 +69,7 @@ function createAsaasClient({ apiKey, environment = "sandbox", fetchImpl = fetch 
       method: "POST",
       body: JSON.stringify(payload)
     }),
+    getPayment: (id) => request(`/payments/${encodeURIComponent(id)}`),
     listSubscriptionPayments: (subscriptionId) =>
       request(`/subscriptions/${encodeURIComponent(subscriptionId)}/payments?limit=1&offset=0`)
   };

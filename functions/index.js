@@ -303,13 +303,25 @@ async function ensureAsaasCustomer(client, companyRef, company) {
 }
 
 function checkoutUrlFrom(resource) {
-  return resource?.invoiceUrl || resource?.bankSlipUrl || resource?.transactionReceiptUrl || "";
+  return resource?.invoiceUrl
+    || resource?.bankSlipUrl
+    || resource?.paymentLink
+    || resource?.checkoutUrl
+    || resource?.url
+    || resource?.transactionReceiptUrl
+    || "";
 }
 
 async function findFirstSubscriptionPayment(client, subscriptionId) {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const payments = await client.listSubscriptionPayments(subscriptionId);
-    if (payments?.data?.[0]) return payments.data[0];
+    const firstPayment = payments?.data?.[0];
+    if (firstPayment?.id) {
+      if (checkoutUrlFrom(firstPayment)) return firstPayment;
+      const payment = await client.getPayment(firstPayment.id);
+      return payment || firstPayment;
+    }
+    if (firstPayment) return firstPayment;
     if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
   }
   return null;
@@ -450,6 +462,11 @@ exports.createAsaasCheckout = onRequest({
       status: "Pendente",
       updatedAt: FieldValue.serverTimestamp()
     };
+    const checkoutUrl = checkoutUrlFrom(payment) || checkoutUrlFrom(subscription);
+    if (!checkoutUrl) {
+      throw Object.assign(new Error("ASAAS_CHECKOUT_URL_MISSING"), { status: 502 });
+    }
+
     const batch = db.batch();
     if (itemKind === "subscription") {
       batch.set(companyRef, {
@@ -479,7 +496,7 @@ exports.createAsaasCheckout = onRequest({
       provider: "asaas",
       gatewaySessionId: payment?.id || subscription?.id || "",
       status: "Aguardando pagamento",
-      sessionUrl: checkoutUrlFrom(payment),
+      sessionUrl: checkoutUrl,
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
     if (historyRef) {
@@ -514,7 +531,7 @@ exports.createAsaasCheckout = onRequest({
       itemKind,
       itemType: item.type || "plan",
       status: "Aguardando pagamento",
-      url: checkoutUrlFrom(payment)
+      url: checkoutUrl
     });
   } catch (error) {
     logger.error("Falha ao criar checkout Asaas", {
@@ -543,6 +560,7 @@ exports.createAsaasCheckout = onRequest({
       CATALOG_ITEM_PRICE_INVALID: "Preço do plano ou serviço inválido.",
       CATALOG_ITEM_CYCLE_INVALID: "Periodicidade do plano ou serviço inválida.",
       CATALOG_ITEM_NAME_REQUIRED: "Nome do plano ou serviço inválido.",
+      ASAAS_CHECKOUT_URL_MISSING: "Pagamento criado, mas o Asaas não retornou o link de checkout. Tente novamente em instantes.",
       "401_TOKEN_MISSING": "401_TOKEN_MISSING",
       "401_TOKEN_INVALID": "401_TOKEN_INVALID",
       "403_COMPANY_NOT_FOUND": "403_COMPANY_NOT_FOUND",

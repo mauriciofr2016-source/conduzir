@@ -3057,7 +3057,8 @@ function renderAdminManagedAccounts() {
 function renderSystemUsers(data) {
   state.systemUsers = Array.isArray(data) ? data : [];
   const term = state.adminUserSearchTerm.trim().toLowerCase();
-  const filteredUsers = term ? state.systemUsers.filter((item) => [item.nome, item.login, item.email, item.perfil, item.status].some((value) => `${value || ""}`.toLowerCase().includes(term))) : state.systemUsers;
+  const visibleUsers = state.systemUsers.filter((item) => !isDeletedRecord(item));
+  const filteredUsers = term ? visibleUsers.filter((item) => [item.nome, item.login, item.email, item.perfil, item.status].some((value) => `${value || ""}`.toLowerCase().includes(term))) : visibleUsers;
   const list = document.getElementById("adminUsersList");
   if (list) {
     list.innerHTML = filteredUsers.length ? filteredUsers.map((item) => `
@@ -3086,7 +3087,7 @@ function renderSystemUsers(data) {
   }
   const preview = document.getElementById("adminUsersPreview");
   if (preview) {
-    preview.innerHTML = state.systemUsers.length ? state.systemUsers.slice(0, 4).map((item) => `
+    preview.innerHTML = visibleUsers.length ? visibleUsers.slice(0, 4).map((item) => `
       <article class="mini-card">
         <strong>${escapeHtml(item.nome || "Sem nome")}</strong>
         <p><strong>Perfil:</strong> ${escapeHtml(item.perfil || "Não informado")}</p>
@@ -3095,9 +3096,9 @@ function renderSystemUsers(data) {
         ${item.perfil === "Administrador" ? "" : `<div class="form-actions compact-actions"><button type="button" class="btn btn-secondary danger-button" data-user-action="delete" data-user-id="${escapeHtml(item.id || "")}">Excluir consultora</button></div>`}
       </article>`).join("") : '<article class="mini-card"><strong>Nenhum usuário criado ainda</strong><p>Cadastre o primeiro login na aba Gestão de Usuários.</p></article>';
   }
-  document.getElementById("adminUserCount") && (document.getElementById("adminUserCount").textContent = state.systemUsers.length);
-  document.getElementById("adminUsersBadgeCount") && (document.getElementById("adminUsersBadgeCount").textContent = state.systemUsers.length);
-  document.getElementById("reportUsers") && (document.getElementById("reportUsers").textContent = state.systemUsers.length);
+  document.getElementById("adminUserCount") && (document.getElementById("adminUserCount").textContent = visibleUsers.length);
+  document.getElementById("adminUsersBadgeCount") && (document.getElementById("adminUsersBadgeCount").textContent = visibleUsers.length);
+  document.getElementById("reportUsers") && (document.getElementById("reportUsers").textContent = visibleUsers.length);
   renderAdminManagedAccounts();
 }
 
@@ -3230,21 +3231,21 @@ async function findExistingUserByLogin(login, ignoreId = "") {
   const normalizedLogin = `${login || ""}`.trim().toLowerCase();
   if (!normalizedLogin) return null;
   const users = state.systemUsers.length ? state.systemUsers : await fetchCollection("systemUsers", []);
-  return users.find((item) => item.id !== ignoreId && `${item.login || ""}`.trim().toLowerCase() === normalizedLogin) || null;
+  return users.find((item) => !isDeletedRecord(item) && item.id !== ignoreId && `${item.login || ""}`.trim().toLowerCase() === normalizedLogin) || null;
 }
 
 async function findExistingUserByEmail(email, ignoreId = "") {
   const normalizedEmail = `${email || ""}`.trim().toLowerCase();
   if (!normalizedEmail) return null;
   const users = state.systemUsers.length ? state.systemUsers : await fetchCollection("systemUsers", []);
-  return users.find((item) => item.id !== ignoreId && `${item.email || ""}`.trim().toLowerCase() === normalizedEmail) || null;
+  return users.find((item) => !isDeletedRecord(item) && item.id !== ignoreId && `${item.email || ""}`.trim().toLowerCase() === normalizedEmail) || null;
 }
 
 async function saveSystemUser(data) {
   data = prepareSystemUserPayload(data);
   if ((data.perfil || "") === "Administrador") {
     const existingUsers = state.systemUsers.length ? state.systemUsers : await fetchCollection("systemUsers", []);
-    const existingMasterAdmin = existingUsers.find((item) => isMasterAdminRecord(item));
+    const existingMasterAdmin = existingUsers.find((item) => !isDeletedRecord(item) && isMasterAdminRecord(item));
     if (existingMasterAdmin) throw new Error("MASTER_ADMIN_EXISTS");
   }
   const duplicatedLogin = await findExistingUserByLogin(data.login);
@@ -3324,7 +3325,19 @@ async function updateSystemUserRecord(userId, data) {
 
 async function deleteSystemUserRecord(userId) {
   if (!userId) throw new Error("USER_ID_REQUIRED");
-  await deleteRecord("systemUsers", userId);
+  const currentUser = state.systemUsers.find((item) => item.id === userId);
+  if (isMasterAdminRecord(currentUser)) throw new Error("MASTER_ADMIN_PROTECTED");
+  const deletedPayload = {
+    status: "Excluído",
+    deleted: true,
+    deletedAt: state.mode === "cloud" ? serverTimestamp() : new Date().toLocaleString("pt-BR"),
+    updatedAt: state.mode === "cloud" ? serverTimestamp() : new Date().toLocaleString("pt-BR")
+  };
+  if (state.mode === "cloud" && state.firestore) {
+    await updateDoc(doc(state.firestore, COLLECTIONS.systemUsers, userId), deletedPayload);
+  } else {
+    await updateRecord("systemUsers", userId, { ...(currentUser || {}), ...deletedPayload });
+  }
   if (state.mode === "local") renderSystemUsers(state.systemUsers);
 }
 
