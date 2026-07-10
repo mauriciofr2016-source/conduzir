@@ -443,12 +443,54 @@ function normalizePriceInput(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function normalizeCatalogBillingCycle(type, value) {
+  const normalized = `${value || (type === "service" ? "avulso" : "mensal")}`.trim().toLowerCase();
+  return type === "service" ? "avulso" : (normalized === "avulso" ? "mensal" : normalized);
+}
+
+function normalizeCatalogItemRecord(item = {}) {
+  const type = `${item.type || item.itemType || "plan"}`.trim().toLowerCase() === "service" ? "service" : "plan";
+  const audience = `${item.audience || (type === "plan" ? "company" : "company_service")}`.trim().toLowerCase();
+  const title = `${item.title || item.name || ""}`.trim();
+  const code = slugifyCatalogValue(item.code || item.id || title);
+  const billingCycle = normalizeCatalogBillingCycle(type, item.billingCycle || item.billingMode);
+  const deleted = item.deleted === true || Boolean(item.deletedAt) || `${item.status || ""}`.trim().toLowerCase() === "excluído";
+  const price = normalizePriceInput(item.price);
+  return {
+    ...item,
+    id: item.id || code,
+    code,
+    name: title,
+    title,
+    description: `${item.description || ""}`.trim(),
+    price,
+    active: item.active !== false && !deleted,
+    type,
+    itemType: type,
+    audience,
+    billingMode: billingCycle === "avulso" ? "one_time" : "recurring",
+    billingCycle,
+    recurring: type === "plan" && billingCycle !== "avulso",
+    permissions: normalizePermissions(item.permissions),
+    deleted
+  };
+}
+
+function isCatalogItemAvailable(item = {}) {
+  return item.active !== false && item.deleted !== true && !item.deletedAt;
+}
+
+function getCatalogItemId(item = {}) {
+  return `${item.id || item.code || ""}`.trim();
+}
+
 function getCatalogItemsByType(type) {
   const source = Array.isArray(state.catalogItems) && state.catalogItems.length
     ? state.catalogItems
     : (state.mode === "local" ? defaultCatalogItems : []);
   return source
-    .filter((item) => `${item.type || ""}` === type && item.active !== false)
+    .map(normalizeCatalogItemRecord)
+    .filter((item) => `${item.type || ""}` === type && isCatalogItemAvailable(item))
     .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0) || `${a.title || ""}`.localeCompare(`${b.title || ""}`, "pt-BR"));
 }
 
@@ -495,7 +537,8 @@ function getCatalogItemByCode(code) {
   const source = Array.isArray(state.catalogItems) && state.catalogItems.length
     ? state.catalogItems
     : (state.mode === "local" ? defaultCatalogItems : []);
-  return source.find((item) => `${item.code || ""}` === `${code || ""}`) || null;
+  const wanted = `${code || ""}`.trim();
+  return source.map(normalizeCatalogItemRecord).find((item) => `${item.id || ""}` === wanted || `${item.code || ""}` === wanted) || null;
 }
 
 function getBillingCycleLabel(value) {
@@ -612,12 +655,14 @@ function getContractedPlanPrice(profile = {}) {
 }
 
 function makeContractedPlanSnapshot(plan = {}) {
-  const price = Number(plan.price || 0);
+  const item = normalizeCatalogItemRecord(plan);
+  const price = Number(item.price || 0);
   return {
-    planCode: plan.code || slugifyCatalogValue(plan.title),
-    planName: plan.title || "Plano empresarial",
+    catalogItemId: getCatalogItemId(item),
+    planCode: item.code || slugifyCatalogValue(item.title),
+    planName: item.title || "Plano empresarial",
     contractedPlanPrice: Number.isFinite(price) ? price : 0,
-    billingCycle: plan.billingCycle || "mensal"
+    billingCycle: item.billingCycle || "mensal"
   };
 }
 
@@ -1449,7 +1494,7 @@ function renderAdminPlanServiceCatalog() {
   const source = Array.isArray(state.catalogItems) && state.catalogItems.length
     ? state.catalogItems
     : (state.mode === "local" ? defaultCatalogItems : []);
-  const ordered = [...source].sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+  const ordered = [...source].map(normalizeCatalogItemRecord).filter((item) => item.deleted !== true).sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
   const companyPlans = ordered.filter((item) => item.type === "plan" && getCatalogAudience(item) === "company");
   const candidatePlans = ordered.filter((item) => item.type === "plan" && getCatalogAudience(item) === "candidate");
   const services = ordered.filter((item) => item.type === "service");
@@ -1474,6 +1519,7 @@ function renderAdminPlanServiceCatalog() {
       <p>${escapeHtml(item.shortDescription || item.description || "Sem descrição.")}</p>
       <div class="record-meta-grid top-gap">
         <span><strong>Código:</strong> ${escapeHtml(item.code || "-")}</span>
+        <span><strong>ID:</strong> ${escapeHtml(getCatalogItemId(item) || "-")}</span>
         <span><strong>Gateway:</strong> ${escapeHtml(item.gateway || "Não definido")}</span>
         <span><strong>Ordem:</strong> ${escapeHtml(item.sortOrder || 0)}</span>
         <span><strong>Status:</strong> ${item.active === false ? "Inativo" : "Ativo"}</span>
@@ -1481,9 +1527,9 @@ function renderAdminPlanServiceCatalog() {
       </div>
       ${item.description ? `<p class="muted-note top-gap">${escapeHtml(item.description)}</p>` : ""}
       <div class="form-actions top-gap">
-        <button type="button" class="btn btn-secondary" data-catalog-action="edit" data-catalog-id="${item.id || item.code}">Editar</button>
-        <button type="button" class="btn btn-secondary" data-catalog-action="toggle" data-catalog-id="${item.id || item.code}">${item.active === false ? "Ativar" : "Inativar"}</button>
-        <button type="button" class="btn btn-secondary" data-catalog-action="delete" data-catalog-id="${item.id || item.code}">Excluir</button>
+        <button type="button" class="btn btn-secondary" data-catalog-action="edit" data-catalog-id="${escapeHtml(getCatalogItemId(item))}">Editar</button>
+        <button type="button" class="btn btn-secondary" data-catalog-action="toggle" data-catalog-id="${escapeHtml(getCatalogItemId(item))}">${item.active === false ? "Ativar" : "Inativar"}</button>
+        <button type="button" class="btn btn-secondary" data-catalog-action="delete" data-catalog-id="${escapeHtml(getCatalogItemId(item))}">Excluir</button>
       </div>
     </article>
   `;
@@ -1531,7 +1577,7 @@ function renderCompanyCatalogSections() {
         </div>
         <p>${escapeHtml(item.shortDescription || item.description || "Sem descrição.")}</p>
         <p class="muted-note top-gap"><strong>Gateway preparado:</strong> ${escapeHtml(item.gateway || getBillingProviderLabel(getActiveBillingSettings().provider))}</p>
-        <button class="btn btn-primary top-gap" type="button" data-plan-contract="${escapeHtml(item.code || "")}">${escapeHtml(getPublicCheckoutLabel())}</button>
+        <button class="btn btn-primary top-gap" type="button" data-plan-contract="${escapeHtml(getCatalogItemId(item))}">${escapeHtml(getPublicCheckoutLabel())}</button>
       </article>
     `).join("") : '<article class="mini-card"><strong>Nenhum plano ativo</strong><p>O administrador ainda não publicou planos nesta versão.</p></article>' ;
   }
@@ -1547,7 +1593,7 @@ function renderCompanyCatalogSections() {
       `<option value="Abrir processo seletivo">Abrir processo seletivo</option>`
     ].join("");
     const serviceOptions = services.length
-      ? services.map((item) => `<option value="${escapeHtml(item.title || "")}" data-service-code="${escapeHtml(item.code || "")}">${escapeHtml(item.title || "Serviço")} — ${formatCurrencyBRL(item.price || 0)}</option>`).join("")
+      ? services.map((item) => `<option value="${escapeHtml(item.title || "")}" data-service-code="${escapeHtml(getCatalogItemId(item))}">${escapeHtml(item.title || "Serviço")} — ${formatCurrencyBRL(item.price || 0)}</option>`).join("")
       : "";
     serviceSelect.innerHTML = companyActionOptions + serviceOptions;
   }
@@ -1564,7 +1610,7 @@ function renderCompanyCatalogSections() {
         </div>
         <p>${escapeHtml(item.shortDescription || item.description || "Serviço executado pela consultoria.")}</p>
         <p class="muted-note top-gap"><strong>Libera:</strong> ${escapeHtml(permissionSummary(item.permissions))}</p>
-        <button class="btn btn-primary top-gap" type="button" data-service-contract="${escapeHtml(item.code || "")}">Contratar Serviço</button>
+        <button class="btn btn-primary top-gap" type="button" data-service-contract="${escapeHtml(getCatalogItemId(item))}">Contratar Serviço</button>
       </article>
     `).join("") : '<article class="mini-card"><strong>Nenhum serviço avulso publicado</strong><p>O administrador ainda não publicou serviços avulsos para empresas.</p></article>';
   }
@@ -1586,9 +1632,9 @@ function renderCompanyCatalogSections() {
 }
 
 function renderCatalogItems(items) {
-  state.catalogItems = Array.isArray(items) && items.length
+  state.catalogItems = (Array.isArray(items) && items.length
     ? items
-    : (state.mode === "local" ? defaultCatalogItems : []);
+    : (state.mode === "local" ? defaultCatalogItems : [])).map(normalizeCatalogItemRecord);
   if (state.mode === "local") localStore.set(KEYS.catalogItems, state.catalogItems);
   renderAdminPlanServiceCatalog();
   renderCompanyCatalogSections();
@@ -1645,7 +1691,11 @@ async function saveCatalogItemRecord(payload) {
   const normalizedAudience = normalizedType === "plan"
     ? "company"
     : (payload.audience || "candidate_service");
-  const data = {
+  const currentId = `${payload.catalogId || ""}`.trim();
+  const source = Array.isArray(state.catalogItems) ? state.catalogItems.map(normalizeCatalogItemRecord) : [];
+  const existing = source.find((item) => getCatalogItemId(item) === currentId);
+  const data = normalizeCatalogItemRecord({
+    ...(existing || {}),
     type: normalizedType,
     audience: normalizedAudience,
     title: `${payload.title || ""}`.trim(),
@@ -1653,26 +1703,25 @@ async function saveCatalogItemRecord(payload) {
     shortDescription: `${payload.shortDescription || ""}`.trim(),
     description: `${payload.description || ""}`.trim(),
     price: normalizePriceInput(payload.price),
-    billingCycle: `${payload.billingCycle || (normalizedType === "service" ? "avulso" : "mensal")}`.trim().toLowerCase(),
+    billingCycle: normalizeCatalogBillingCycle(normalizedType, payload.billingCycle),
     gateway: `${payload.gateway || "Asaas"}`.trim(),
     sortOrder: Number(payload.sortOrder || 0),
-    active: normalizedType === "plan" && normalizedAudience === "company" ? true : `${payload.active}` !== "false",
+    active: `${payload.active}` !== "false",
     featured: `${payload.featured}` === "true",
     permissions: normalizePermissions(Object.fromEntries(
       PERMISSION_KEYS.map((key) => [key, payload[`permissions.${key}`] === "on"])
     ))
-  };
+  });
+  delete data.id;
+  delete data.deleted;
   if (!data.code || !data.title || !Number.isFinite(data.price) || data.price <= 0 || !data.billingCycle) {
     throw new Error("CATALOG_PLAN_REQUIRED_FIELDS");
   }
-  const currentId = `${payload.catalogId || ""}`.trim();
-  const source = Array.isArray(state.catalogItems) ? state.catalogItems : [];
-  const duplicate = source.find((item) => `${item.code || ""}` === data.code && `${item.id || item.code || ""}` !== currentId);
+  const duplicate = source.find((item) => item.deleted !== true && `${item.code || ""}` === data.code && getCatalogItemId(item) !== currentId);
   if (duplicate) throw new Error("CATALOG_CODE_EXISTS");
   if (currentId) {
-    const existing = source.find((item) => `${item.id || item.code || ""}` === currentId);
     if (existing?.id && (state.mode === "cloud" && state.firestore)) {
-      await updateRecord("catalogItems", existing.id, data);
+      await updateRecord("catalogItems", existing.id, { ...data, updatedAt: serverTimestamp() });
     } else if (state.mode === "cloud" && state.firestore) {
       await setDoc(doc(state.firestore, COLLECTIONS.catalogItems, data.code), {
         ...data,
@@ -1680,7 +1729,7 @@ async function saveCatalogItemRecord(payload) {
         updatedAt: serverTimestamp()
       }, { merge: true });
     } else {
-      const next = source.map((item) => `${item.id || item.code || ""}` === currentId ? { ...item, ...data, id: item.id || item.code || currentId } : item);
+      const next = source.map((item) => getCatalogItemId(item) === currentId ? normalizeCatalogItemRecord({ ...item, ...data, id: item.id || item.code || currentId, updatedAt: new Date().toLocaleString("pt-BR") }) : item);
       localStore.set(KEYS.catalogItems, next);
       state.catalogItems = next;
       renderCatalogItems(next);
@@ -1700,24 +1749,28 @@ async function saveCatalogItemRecord(payload) {
 
 async function toggleCatalogItemRecord(record) {
   const nextStatus = !(record.active !== false);
-  if (record.type === "plan" && getCatalogAudience(record) === "company" && nextStatus === false) {
-    throw new Error("COMPANY_PLAN_ACTIVE_REQUIRED");
-  }
   if (record.id && state.mode === "cloud" && state.firestore) {
-    await updateRecord("catalogItems", record.id, { active: nextStatus });
+    await updateRecord("catalogItems", record.id, { active: nextStatus, updatedAt: serverTimestamp() });
     return;
   }
-  const next = (state.catalogItems || []).map((item) => `${item.id || item.code || ""}` === `${record.id || record.code || ""}` ? { ...item, active: nextStatus } : item);
+  const next = (state.catalogItems || []).map((item) => getCatalogItemId(item) === getCatalogItemId(record) ? normalizeCatalogItemRecord({ ...item, active: nextStatus, updatedAt: new Date().toLocaleString("pt-BR") }) : item);
   localStore.set(KEYS.catalogItems, next);
   renderCatalogItems(next);
 }
 
 async function deleteCatalogItemRecord(record) {
   if (record.id && state.mode === "cloud" && state.firestore) {
-    await deleteRecord("catalogItems", record.id);
+    await updateRecord("catalogItems", record.id, {
+      active: false,
+      deleted: true,
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
     return;
   }
-  const next = (state.catalogItems || []).filter((item) => `${item.id || item.code || ""}` !== `${record.id || record.code || ""}`);
+  const next = (state.catalogItems || []).map((item) => getCatalogItemId(item) === getCatalogItemId(record)
+    ? normalizeCatalogItemRecord({ ...item, active: false, deleted: true, deletedAt: new Date().toLocaleString("pt-BR"), updatedAt: new Date().toLocaleString("pt-BR") })
+    : item);
   localStore.set(KEYS.catalogItems, next);
   renderCatalogItems(next.length ? next : defaultCatalogItems);
 }
@@ -1861,6 +1914,7 @@ async function startProfessionalCheckout(plan, options = {}) {
     companyName: company.empresa || currentUser.displayName || "Empresa",
     contactEmail: currentUser.email || company.email || "",
     planName: contractedPlan.planName,
+    catalogItemId: contractedPlan.catalogItemId,
     planCode: contractedPlan.planCode,
     planPrice: contractedPlan.contractedPlanPrice,
     contractedPlanPrice: contractedPlan.contractedPlanPrice,
@@ -1913,13 +1967,13 @@ async function startProfessionalCheckout(plan, options = {}) {
           "Content-Type": secureHeaders["Content-Type"],
           Authorization: idToken ? `Bearer ${maskTokenForLog(idToken)} (len=${idToken.length})` : ""
         },
-        payload: { planCode: sessionPayload.planCode }
+        payload: { catalogItemId: sessionPayload.catalogItemId, planCode: sessionPayload.planCode }
       });
       const response = await fetch(checkoutEndpoint, {
         method: "POST",
         headers: secureHeaders,
         body: JSON.stringify({
-          planCode: sessionPayload.planCode,
+          catalogItemId: sessionPayload.catalogItemId,
           serviceContext: options.serviceContext || undefined
         })
       });
@@ -2258,6 +2312,7 @@ function getLatestCandidateFeedback(item) {
 
 function getLatestCandidateDisc(item) {
   const itemEmail = `${item?.email || item?.candidateEmail || ""}`.toLowerCase();
+  if (item?.discResult) return item.discResult;
   if (!itemEmail) return null;
   return state.feedbacks.find((fb) => `${fb.candidateEmail || fb.email || ""}`.toLowerCase() === itemEmail && `${fb.tipo || ""}`.toLowerCase() === "teste disc") || null;
 }
@@ -2593,7 +2648,7 @@ function renderCandidateLinkedServicesForCompany(candidate) {
             <p>${escapeHtml(service.shortDescription || service.description || "Serviço executado pela consultora e vinculado a este currículo.")}</p>
             <div class="price">${formatCurrencyBRL(service.price || 0)}</div>
             <button class="btn btn-primary btn-small" type="button"
-              data-company-candidate-service="${escapeHtml(service.code || service.title || "")}"
+              data-company-candidate-service="${escapeHtml(getCatalogItemId(service) || service.title || "")}"
               data-service-title="${escapeHtml(service.title || "Serviço")}"
               data-service-price="${escapeHtml(service.price || 0)}"
               data-candidate-id="${escapeHtml(candidateId)}"
@@ -3025,10 +3080,9 @@ function renderCandidateTests() {
   const scopedFeedbacks = getCandidateScopedFeedbacks(state.feedbacks);
   const latestCandidate = (getCandidateScopedCandidates(state.candidates)[0] || state.currentCandidateProfile || {});
   const disc = getLatestCandidateDisc(latestCandidate) || scopedFeedbacks.find((item) => `${item.tipo || ""}`.toLowerCase() === "teste disc");
-  const hasDiscRequest = getCandidateScopedServiceRequests(state.serviceRequests).some((item) => `${item.tipo || ""}`.toLowerCase().includes("disc"));
   const totalFeedbacks = scopedFeedbacks.length;
   grid.innerHTML = `
-    <article class="mini-card"><strong>Perfil comportamental</strong><p>Status: ${disc ? "DISC preenchido e disponível para análise" : hasDiscRequest ? "DISC solicitado pela consultoria" : totalFeedbacks ? "em análise pela consultoria" : "aguardando aplicação"}.</p></article>
+    <article class="mini-card"><strong>Perfil comportamental</strong><p>Status: ${disc ? "DISC preenchido e disponível para análise" : "disponível para preenchimento"}.</p></article>
     <article class="mini-card"><strong>Avaliação psicossocial</strong><p>Status: ${totalFeedbacks > 1 ? "há registros no sistema" : "em triagem"}.</p></article>
     <article class="mini-card"><strong>Teste técnico</strong><p>Status: ${totalFeedbacks ? "acompanhe atualizações no parecer da consultora" : "ainda não solicitado"}.</p></article>`;
   const discHost = document.getElementById("candidateDiscResult");
@@ -3042,7 +3096,15 @@ function renderCandidateTests() {
         <p><strong>Pontos fortes:</strong> ${escapeHtml(disc.pontosFortes || "Aguardando leitura da consultora.")}</p>
         <p><strong>Pontos de atenção:</strong> ${escapeHtml(disc.pontosAtencao || "Aguardando leitura da consultora.")}</p>
         <p><strong>Observações:</strong> ${escapeHtml(disc.observacoes || "Sem observações adicionais.")}</p>
-      </article>` : '<article class="mini-card"><strong>Nenhum DISC preenchido</strong><p>Quando a consultora solicitar, preencha o teste profissional e salve nesta área. O gráfico será calculado automaticamente.</p></article>';
+      </article>` : '<article class="mini-card"><strong>DISC disponível</strong><p>Preencha uma única vez. O resultado será salvo no seu perfil e não poderá ser alterado depois.</p></article>';
+  }
+  const discForm = document.getElementById("discForm");
+  if (discForm) {
+    discForm.querySelectorAll("input, textarea, button").forEach((field) => {
+      field.disabled = Boolean(disc);
+    });
+    const submit = discForm.querySelector('button[type="submit"]');
+    if (submit && disc) submit.textContent = "DISC já preenchido";
   }}
 
 function renderCandidateStatus() {
@@ -3083,6 +3145,43 @@ async function saveJob(data) {
 async function saveFeedback(data) {
   await saveRecord("feedbacks", data);
   if (state.mode === "local") renderFeedbacks(state.feedbacks);
+}
+
+async function saveCandidateDiscResult(data) {
+  const uid = getCurrentCandidateUid();
+  if (!uid) throw new Error("AUTH_REQUIRED");
+  const existingDisc = getLatestCandidateDisc(state.currentCandidateProfile || {});
+  if (existingDisc) throw new Error("DISC_ALREADY_COMPLETED");
+  const payload = {
+    ...data,
+    candidateUid: uid,
+    locked: true,
+    completedAt: new Date().toISOString()
+  };
+  if (state.mode === "cloud" && state.firestore) {
+    const discRef = doc(state.firestore, COLLECTIONS.feedbacks, `disc_${uid}`);
+    const existing = await getDoc(discRef);
+    if (existing.exists()) throw new Error("DISC_ALREADY_COMPLETED");
+    await setDoc(discRef, {
+      ...payload,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+    await persistCandidateProfile({
+      ...(state.currentCandidateProfile || {}),
+      discCompleted: true,
+      discCompletedAt: serverTimestamp(),
+      discResult: payload
+    });
+    return;
+  }
+  await saveFeedback(payload);
+  await persistCandidateProfile({
+    ...(state.currentCandidateProfile || {}),
+    discCompleted: true,
+    discCompletedAt: new Date().toISOString(),
+    discResult: payload
+  });
 }
 
 async function saveServiceRequest(data) {
@@ -3684,11 +3783,12 @@ async function readCandidateResumeFile(form) {
   discForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!state.currentCandidateUser && !state.currentCandidateProfile) return createNotice("Faça login para salvar o teste DISC.", discForm.parentElement);
+    if (getLatestCandidateDisc(state.currentCandidateProfile || {})) return createNotice("O teste DISC já foi preenchido e não pode ser alterado.", discForm.parentElement);
     const formData = new FormData(discForm);
     const data = Object.fromEntries(formData.entries());
     const discResult = calculateDiscResult(formData);
     try {
-      await saveFeedback({
+      await saveCandidateDiscResult({
         ...data,
         candidato: state.currentCandidateProfile?.nome || state.currentCandidateUser?.displayName || "Candidato",
         candidateEmail: state.currentCandidateUser?.email || data.candidateEmail || state.currentCandidateProfile?.email || "",
@@ -3716,11 +3816,13 @@ async function readCandidateResumeFile(form) {
       renderDiscQuestionnaire();
       const emailField = discForm.querySelector('input[name="candidateEmail"]');
       if (emailField) emailField.value = state.currentCandidateUser?.email || state.currentCandidateProfile?.email || "";
-      createNotice("Teste DISC profissional salvo com gráfico percentual.", discForm.parentElement);
+      await loadCandidateProfileForCurrentUser();
+      await hydrateInitialData();
+      createNotice("Teste DISC profissional salvo e bloqueado para alteração.", discForm.parentElement);
       renderCandidateTests();
     } catch (error) {
       console.error(error);
-      createNotice("Não foi possível salvar o teste DISC agora.", discForm.parentElement);
+      createNotice(error?.message === "DISC_ALREADY_COMPLETED" ? "O teste DISC já foi preenchido e não pode ser alterado." : "Não foi possível salvar o teste DISC agora.", discForm.parentElement);
     }
   });
 
@@ -3748,7 +3850,7 @@ function initJobPage() {
       const catalogService = getCatalogItemByCode(serviceCode) || getCatalogItemsByType("service").find((item) => item.title === serviceButton.dataset.serviceTitle) || null;
       if (!catalogService) return showCompanyAuthNotice("Serviço não encontrado para iniciar a contratação.", "error");
       try {
-        setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.textContent || "Contratar", true);
+        setButtonBusy(serviceButton, "Abrindo checkout...", serviceButton.textContent || "Contratar", true);
         const result = await startProfessionalCheckout(catalogService, {
           serviceContext: {
             candidateId: serviceButton.dataset.candidateId || "",
@@ -3764,9 +3866,9 @@ function initJobPage() {
         }
       } catch (error) {
         console.error(error);
-        showCompanyAuthNotice("Nao foi possivel iniciar o pagamento do servico agora.", "error");
+        showCompanyAuthNotice(error?.message || "Nao foi possivel iniciar o pagamento do servico agora.", "error");
       } finally {
-        setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.dataset.idleLabel || "Contratar para este candidato", false);
+        setButtonBusy(serviceButton, "Abrindo checkout...", serviceButton.dataset.idleLabel || "Contratar para este candidato", false);
       }
     }
   });
@@ -3845,7 +3947,7 @@ function initJobPage() {
       const catalogService = getCatalogItemByCode(serviceCode) || null;
       if (!catalogService) return showCompanyAuthNotice("Serviço não encontrado para iniciar a contratação.", "error");
       try {
-        setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.textContent || "Contratar Serviço", true);
+        setButtonBusy(serviceButton, "Abrindo checkout...", serviceButton.textContent || "Contratar Serviço", true);
         const result = await startProfessionalCheckout(catalogService, {
           serviceContext: {
             message: `Serviço avulso contratado pela empresa: ${catalogService.title || serviceCode}.`
@@ -3860,9 +3962,9 @@ function initJobPage() {
         console.error(error);
         await hydrateInitialData();
         syncCompanyUiState();
-        showCompanyAuthNotice("Nao foi possivel iniciar o pagamento do servico agora.", "error");
+        showCompanyAuthNotice(error?.message || "Nao foi possivel iniciar o pagamento do servico agora.", "error");
       } finally {
-        setButtonBusy(serviceButton, "Preparando pagamento...", serviceButton.dataset.idleLabel || "Contratar Serviço", false);
+        setButtonBusy(serviceButton, "Abrindo checkout...", serviceButton.dataset.idleLabel || "Contratar Serviço", false);
       }
       return;
     }
@@ -3874,7 +3976,7 @@ function initJobPage() {
     const catalogPlan = getCatalogItemByCode(code) || getCatalogItemsByType("plan").find((item) => item.title === code) || null;
     if (!catalogPlan) return showCompanyAuthNotice("Plano não encontrado para iniciar a contratação.", "error");
     try {
-      setButtonBusy(button, "Preparando pagamento...", button.textContent || "Contratar Plano", true);
+      setButtonBusy(button, "Abrindo checkout...", button.textContent || "Contratar Plano", true);
       const result = await startProfessionalCheckout(catalogPlan);
       await hydrateInitialData();
       syncCompanyUiState();
@@ -3885,9 +3987,9 @@ function initJobPage() {
       console.error(error);
       await hydrateInitialData();
       syncCompanyUiState();
-      showCompanyAuthNotice("Não foi possível abrir o pagamento seguro agora. Tente novamente em instantes ou fale com o suporte.", "error");
+      showCompanyAuthNotice(error?.message || "Não foi possível abrir o pagamento seguro agora. Tente novamente em instantes ou fale com o suporte.", "error");
     } finally {
-      setButtonBusy(button, "Preparando pagamento...", button.dataset.idleLabel || "Contratar Plano", false);
+      setButtonBusy(button, "Abrindo checkout...", button.dataset.idleLabel || "Contratar Plano", false);
     }
   });
   const form = document.getElementById("jobForm");

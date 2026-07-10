@@ -13,6 +13,14 @@ const CYCLE_MAP = {
 };
 
 const PAID_STATUSES = new Set(["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]);
+const DEFAULT_PERMISSIONS = {
+  curriculumAccess: false,
+  selfServiceHiring: false,
+  consultancy: false,
+  managedRecruitment: false,
+  nr1: false,
+  reports: false
+};
 
 function digitsOnly(value) {
   return `${value || ""}`.replace(/\D/g, "");
@@ -21,6 +29,56 @@ function digitsOnly(value) {
 function normalizeCycle(value) {
   const normalized = `${value || "mensal"}`.trim().toLowerCase();
   return normalized === "avulso" ? "avulso" : (CYCLE_MAP[normalized] || "MONTHLY");
+}
+
+function normalizeCatalogCode(value) {
+  return `${value || ""}`.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizePermissions(value = {}) {
+  return Object.fromEntries(
+    Object.keys(DEFAULT_PERMISSIONS).map((key) => [key, value?.[key] === true])
+  );
+}
+
+function normalizeCatalogItem(raw = {}, id = "") {
+  const type = `${raw.type || raw.itemType || "plan"}`.trim().toLowerCase() === "service" ? "service" : "plan";
+  const audience = `${raw.audience || (type === "plan" ? "company" : "company_service")}`.trim().toLowerCase();
+  const billingCycle = `${raw.billingCycle || raw.billingMode || (type === "service" ? "avulso" : "mensal")}`.trim().toLowerCase();
+  const price = Number(raw.price);
+  const code = normalizeCatalogCode(raw.code || id);
+  const title = `${raw.title || raw.name || ""}`.trim();
+  const deleted = raw.deleted === true || raw.deletedAt || `${raw.status || ""}`.trim().toLowerCase() === "excluído";
+  return {
+    ...raw,
+    id,
+    code,
+    name: title,
+    title,
+    description: `${raw.description || raw.shortDescription || ""}`.trim(),
+    price,
+    active: raw.active !== false && !deleted,
+    type,
+    itemType: type,
+    audience,
+    billingMode: billingCycle === "avulso" ? "one_time" : "recurring",
+    billingCycle,
+    recurring: type === "plan" && billingCycle !== "avulso",
+    permissions: normalizePermissions(raw.permissions),
+    deleted: Boolean(deleted)
+  };
+}
+
+function validateCatalogItemForCheckout(item = {}) {
+  if (!item.id && !item.code) throw Object.assign(new Error("CATALOG_ITEM_NOT_FOUND"), { status: 404 });
+  if (item.deleted || item.active === false) throw Object.assign(new Error("CATALOG_ITEM_UNAVAILABLE"), { status: 409 });
+  if (!["plan", "service"].includes(item.type)) throw Object.assign(new Error("CATALOG_ITEM_TYPE_INVALID"), { status: 409 });
+  if (!item.title) throw Object.assign(new Error("CATALOG_ITEM_NAME_REQUIRED"), { status: 409 });
+  if (!Number.isFinite(item.price) || item.price <= 0) throw Object.assign(new Error("CATALOG_ITEM_PRICE_INVALID"), { status: 409 });
+  if (!item.billingCycle) throw Object.assign(new Error("CATALOG_ITEM_CYCLE_INVALID"), { status: 409 });
+  if (item.type === "plan" && item.billingCycle === "avulso") throw Object.assign(new Error("CATALOG_ITEM_CYCLE_INVALID"), { status: 409 });
+  if (item.type === "service" && item.billingCycle !== "avulso") throw Object.assign(new Error("CATALOG_ITEM_CYCLE_INVALID"), { status: 409 });
+  return item;
 }
 
 function toDateOnly(date) {
@@ -90,15 +148,20 @@ function isValidWebhookToken(received, expected) {
 }
 
 module.exports = {
+  DEFAULT_PERMISSIONS,
   PAID_STATUSES,
   addDays,
   digitsOnly,
   isValidWebhookToken,
   makeExternalReference,
+  normalizeCatalogCode,
+  normalizeCatalogItem,
   normalizeCycle,
+  normalizePermissions,
   parseCompanyUid,
   paymentState,
   resolveCompanyPaymentState,
   safeDocumentId,
-  toDateOnly
+  toDateOnly,
+  validateCatalogItemForCheckout
 };

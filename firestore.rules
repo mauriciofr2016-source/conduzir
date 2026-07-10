@@ -38,6 +38,38 @@ service cloud.firestore {
       ]);
     }
 
+    function discFields() {
+      return [
+        "discCompleted",
+        "discCompletedAt",
+        "discResult"
+      ];
+    }
+
+    function discFieldsUnchanged() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(discFields());
+    }
+
+    function mayWriteCandidateDiscOnce(id) {
+      return signedIn()
+        && request.auth.uid == id
+        && resource.data.discCompleted != true
+        && request.resource.data.discCompleted == true
+        && request.resource.data.discResult.candidateUid == request.auth.uid;
+    }
+
+    function isDiscFeedback(id) {
+      return id == "disc_" + request.auth.uid;
+    }
+
+    function validOwnDiscFeedback(id) {
+      return isDiscFeedback(id)
+        && !exists(/databases/$(database)/documents/feedbacks/$(id))
+        && request.resource.data.tipo == "Teste DISC"
+        && request.resource.data.candidateUid == request.auth.uid
+        && request.resource.data.locked == true;
+    }
+
     match /companies/{uid} {
       allow read: if ownsCompany(uid) || signedIn();
       allow create: if ownsCompany(uid)
@@ -80,7 +112,14 @@ service cloud.firestore {
     }
 
     match /candidates/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && (!request.resource.data.keys().hasAny(discFields())
+          || (request.auth.uid == id && request.resource.data.discCompleted == true && request.resource.data.discResult.candidateUid == request.auth.uid));
+      allow update: if isAdmin()
+        || (signedIn() && discFieldsUnchanged())
+        || mayWriteCandidateDiscOnce(id);
+      allow delete: if isAdmin();
     }
 
     match /jobs/{id} {
@@ -89,7 +128,12 @@ service cloud.firestore {
     }
 
     match /feedbacks/{id} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow create: if isAdmin()
+        || validOwnDiscFeedback(id)
+        || (signedIn() && !id.matches("^disc_.*$"));
+      allow update, delete: if isAdmin()
+        || (signedIn() && !id.matches("^disc_.*$"));
     }
 
     match /system_users/{id} {

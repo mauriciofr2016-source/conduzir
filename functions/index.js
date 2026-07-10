@@ -12,11 +12,15 @@ const {
   digitsOnly,
   isValidWebhookToken,
   makeExternalReference,
+  normalizeCatalogCode,
+  normalizeCatalogItem,
   normalizeCycle,
+  normalizePermissions,
   parseCompanyUid,
   resolveCompanyPaymentState,
   safeDocumentId,
-  toDateOnly
+  toDateOnly,
+  validateCatalogItemForCheckout
 } = require("./lib/billing");
 
 const PROJECT_ID = "bancotalentoserika";
@@ -33,14 +37,6 @@ const ALLOWED_ORIGINS = new Set([
   "https://bancotalentoserika.web.app",
   "https://bancotalentoserika.firebaseapp.com"
 ]);
-const DEFAULT_PERMISSIONS = {
-  curriculumAccess: false,
-  selfServiceHiring: false,
-  consultancy: false,
-  managedRecruitment: false,
-  nr1: false,
-  reports: false
-};
 
 function setCors(req, res) {
   const origin = req.get("origin");
@@ -91,29 +87,24 @@ function authDebug(req, step, extra = {}) {
   });
 }
 
-function normalizePlanCode(value) {
-  return `${value || ""}`.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function normalizePermissions(value = {}) {
-  return Object.fromEntries(
-    Object.keys(DEFAULT_PERMISSIONS).map((key) => [key, value?.[key] === true])
-  );
-}
-
 function getCatalogItemKind(item = {}) {
   const type = `${item.type || ""}`.trim().toLowerCase();
   const cycle = normalizeCycle(item.billingCycle);
   return type === "service" || cycle === "avulso" ? "service" : "subscription";
 }
 
-async function findCatalogItemByCode(code) {
+async function findCatalogItem(identifier) {
+  const id = `${identifier || ""}`.trim();
+  if (!id) return null;
+  const direct = await db.collection("catalog_items").doc(id).get();
+  if (direct.exists) return normalizeCatalogItem(direct.data(), direct.id);
+  const code = normalizeCatalogCode(id);
   if (!code) return null;
   const snapshot = await db.collection("catalog_items")
     .where("code", "==", code)
     .limit(1)
     .get();
-  return snapshot.empty ? null : { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+  return snapshot.empty ? null : normalizeCatalogItem(snapshot.docs[0].data(), snapshot.docs[0].id);
 }
 
 async function authenticateCompany(req) {
@@ -215,48 +206,67 @@ async function authenticateCompany(req) {
   return decoded;
 }
 
-async function getCatalogCheckoutItem(itemCode) {
-  const normalized = normalizePlanCode(itemCode);
-  let item = await findCatalogItemByCode(normalized);
-  if (!item) throw Object.assign(new Error("PLAN_NOT_FOUND"), { status: 404 });
+async function getCatalogCheckoutItem(identifier) {
+  const item = await findCatalogItem(identifier);
+  if (!item) throw Object.assign(new Error("CATALOG_ITEM_NOT_FOUND"), { status: 404 });
   const audience = `${item.audience || "company"}`.toLowerCase();
   const type = `${item.type || "plan"}`.toLowerCase();
   const audienceAllowed = type === "service"
     ? ["company", "company_service", "candidate_service"].includes(audience)
     : audience === "company";
-  if (item.active === false || !audienceAllowed || !["plan", "service"].includes(type)) {
-    throw Object.assign(new Error("PLAN_UNAVAILABLE"), { status: 409 });
+  if (item.deleted || item.active === false || !audienceAllowed || !["plan", "service"].includes(type)) {
+    throw Object.assign(new Error("CATALOG_ITEM_UNAVAILABLE"), { status: 409 });
   }
-  const price = Number(item.price);
-  if (!Number.isFinite(price) || price <= 0) throw Object.assign(new Error("PLAN_PRICE_INVALID"), { status: 409 });
-  return {
+  return validateCatalogItemForCheckout({
     ...item,
     type,
     audience,
     permissions: normalizePermissions(item.permissions)
-  };
+  });
 }
 
-async function reserveCheckout(companyRef, planCode) {
-  await db.runTransaction(async (transaction) => {
+async function reserveCheckout(companyRef, item) {
+  return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(companyRef);
     if (!snapshot.exists) throw Object.assign(new Error("403_COMPANY_NOT_FOUND"), { status: 403 });
     const company = snapshot.data();
+    const now = Date.now();
     const lockAt = company.billingCheckoutLockedAt?.toDate?.();
-    if (lockAt && Date.now() - lockAt.getTime() < CHECKOUT_LOCK_MINUTES * 60 * 1000) {
+    if (lockAt && now - lockAt.getTime() < CHECKOUT_LOCK_MINUTES * 60 * 1000) {
       throw Object.assign(new Error("CHECKOUT_IN_PROGRESS"), { status: 409 });
+    }
+    const itemKind = getCatalogItemKind(item);
+    const idempotencyKey = safeDocumentId(`${companyRef.id}:${item.id}:${itemKind}:${Math.floor(now / (CHECKOUT_LOCK_MINUTES * 60 * 1000))}`);
+    const sessionRef = db.collection("payment_sessions").doc(idempotencyKey);
+    const sessionSnapshot = await transaction.get(sessionRef);
+    const session = sessionSnapshot.exists ? sessionSnapshot.data() : null;
+    if (session?.status === "Aguardando pagamento" && session?.sessionUrl) {
+      return { duplicate: true, sessionRef, session };
     }
     transaction.update(companyRef, {
       billingCheckoutLockedAt: FieldValue.serverTimestamp(),
-      billingCheckoutPlanCode: planCode,
+      billingCheckoutCatalogItemId: item.id,
+      billingCheckoutPlanCode: item.code,
       updatedAt: FieldValue.serverTimestamp()
     });
+    transaction.set(sessionRef, {
+      companyUid: companyRef.id,
+      catalogItemId: item.id,
+      planCode: item.code,
+      itemKind,
+      status: "Processando checkout",
+      provider: "asaas",
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    return { duplicate: false, sessionRef };
   });
 }
 
 async function releaseCheckout(companyRef, errorMessage = "") {
   await companyRef.set({
     billingCheckoutLockedAt: FieldValue.delete(),
+    billingCheckoutCatalogItemId: FieldValue.delete(),
     billingCheckoutPlanCode: FieldValue.delete(),
     billingCheckoutError: errorMessage || FieldValue.delete(),
     updatedAt: FieldValue.serverTimestamp()
@@ -316,7 +326,7 @@ exports.createAsaasCheckout = onRequest({
   authDebug(req, "request_received", {
     headers: sanitizedHeaders(req),
     bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body) : [],
-    planCodePreview: normalizePlanCode(req.body?.planCode || "")
+    catalogItemIdPreview: `${req.body?.catalogItemId || req.body?.planCode || ""}`.trim()
   });
   if (req.method === "OPTIONS") {
     authDebug(req, "preflight_options_return_204");
@@ -327,31 +337,43 @@ exports.createAsaasCheckout = onRequest({
   let companyRef;
   try {
     const auth = await authenticateCompany(req);
-    const planCode = normalizePlanCode(req.body?.planCode || req.body?.itemCode || req.body?.serviceCode);
-    if (!planCode) return sendError(res, 400, "PLAN_CODE_REQUIRED", "Informe o plano ou serviço.");
+    const catalogItemId = `${req.body?.catalogItemId || req.body?.itemId || req.body?.planCode || req.body?.itemCode || req.body?.serviceCode || ""}`.trim();
+    if (!catalogItemId) return sendError(res, 400, "CATALOG_ITEM_ID_REQUIRED", "Informe o plano ou serviço.");
 
     companyRef = db.collection("companies").doc(auth.uid);
-    authDebug(req, "company_lookup_start", { uid: auth.uid, planCode });
+    const [item, billingSnapshot] = await Promise.all([
+      getCatalogCheckoutItem(catalogItemId),
+      db.collection("billing_settings").doc("main").get()
+    ]);
+    authDebug(req, "company_lookup_start", { uid: auth.uid, catalogItemId, resolvedCatalogItemId: item.id, planCode: item.code });
     const companySnapshot = await companyRef.get();
     authDebug(req, "company_lookup_result", {
       uid: auth.uid,
       companyFound: companySnapshot.exists,
-      planCode
+      catalogItemId: item.id,
+      planCode: item.code
     });
     if (!companySnapshot.exists) {
       authDebug(req, "returning_403", { reason: "403_COMPANY_NOT_FOUND", uid: auth.uid });
       throw Object.assign(new Error("403_COMPANY_NOT_FOUND"), { status: 403 });
     }
-    await reserveCheckout(companyRef, planCode);
-    const [item, billingSnapshot] = await Promise.all([
-      getCatalogCheckoutItem(planCode),
-      db.collection("billing_settings").doc("main").get()
-    ]);
+    const reservation = await reserveCheckout(companyRef, item);
+    if (reservation.duplicate) {
+      return res.status(200).json({
+        sessionId: reservation.sessionRef.id,
+        duplicate: true,
+        itemKind: reservation.session.itemKind || getCatalogItemKind(item),
+        itemType: item.type || "plan",
+        status: reservation.session.status,
+        url: reservation.session.sessionUrl || ""
+      });
+    }
     const itemKind = getCatalogItemKind(item);
     authDebug(req, "plan_lookup_result", {
       uid: auth.uid,
-      planCode,
-      planFound: Boolean(item?.code),
+      planCode: item.code,
+      catalogItemId: item.id,
+      planFound: Boolean(item?.id),
       itemKind,
       itemType: item.type || ""
     });
@@ -378,7 +400,7 @@ exports.createAsaasCheckout = onRequest({
     const trialDays = Math.max(0, Number(billing.trialDays || 0));
     const dueDate = toDateOnly(addDays(contractedAt, trialDays));
     const cycle = normalizeCycle(item.billingCycle);
-    const externalReference = makeExternalReference(auth.uid, `${itemKind}:${item.code}`);
+    const externalReference = makeExternalReference(auth.uid, `${itemKind}:${item.id}`);
     const serviceContext = req.body?.serviceContext && typeof req.body.serviceContext === "object"
       ? {
         candidateId: `${req.body.serviceContext.candidateId || ""}`.trim(),
@@ -391,7 +413,7 @@ exports.createAsaasCheckout = onRequest({
       customer: customerId,
       billingType: asaasBillingType.value(),
       value: Number(item.price),
-      description: `${item.title} - Conduzir Talentos`.slice(0, 500),
+      description: `${item.title || item.name} - Conduzir Talentos`.slice(0, 500),
       externalReference
     };
 
@@ -408,11 +430,12 @@ exports.createAsaasCheckout = onRequest({
       payment = await findFirstSubscriptionPayment(client, subscription.id);
     }
 
-    const sessionRef = db.collection("payment_sessions").doc();
+    const sessionRef = reservation.sessionRef;
     const historyRef = payment?.id ? db.collection("payment_history").doc(payment.id) : null;
     const contract = {
       planCode: item.code,
-      planName: item.title,
+      catalogItemId: item.id,
+      planName: item.title || item.name,
       contractedPlanPrice: Number(item.price),
       contractedAt: Timestamp.fromDate(contractedAt),
       billingCycle: item.billingCycle || (itemKind === "service" ? "avulso" : "mensal"),
@@ -433,6 +456,7 @@ exports.createAsaasCheckout = onRequest({
         ...contract,
         recurringPermissions: item.permissions,
         billingCheckoutLockedAt: FieldValue.delete(),
+        billingCheckoutCatalogItemId: FieldValue.delete(),
         billingCheckoutPlanCode: FieldValue.delete(),
         billingCheckoutError: FieldValue.delete()
       }, { merge: true });
@@ -440,6 +464,7 @@ exports.createAsaasCheckout = onRequest({
       batch.set(companyRef, {
         asaasCustomerId: customerId,
         billingCheckoutLockedAt: FieldValue.delete(),
+        billingCheckoutCatalogItemId: FieldValue.delete(),
         billingCheckoutPlanCode: FieldValue.delete(),
         billingCheckoutError: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp()
@@ -455,13 +480,14 @@ exports.createAsaasCheckout = onRequest({
       gatewaySessionId: payment?.id || subscription?.id || "",
       status: "Aguardando pagamento",
       sessionUrl: checkoutUrlFrom(payment),
-      createdAt: FieldValue.serverTimestamp()
-    });
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
     if (historyRef) {
       batch.set(historyRef, {
+        catalogItemId: item.id,
         companyUid: auth.uid,
         planCode: item.code,
-        planName: item.title,
+        planName: item.title || item.name,
         contractedPlanPrice: Number(item.price),
         amount: Number(payment.value ?? item.price),
         paidAmount: 0,
@@ -511,6 +537,12 @@ exports.createAsaasCheckout = onRequest({
       PLAN_NOT_FOUND: "Plano não encontrado.",
       PLAN_UNAVAILABLE: "Plano indisponível.",
       PLAN_PRICE_INVALID: "Preço do plano inválido.",
+      CATALOG_ITEM_ID_REQUIRED: "Informe o plano ou serviço.",
+      CATALOG_ITEM_NOT_FOUND: "Plano ou serviço não encontrado.",
+      CATALOG_ITEM_UNAVAILABLE: "Plano ou serviço indisponível.",
+      CATALOG_ITEM_PRICE_INVALID: "Preço do plano ou serviço inválido.",
+      CATALOG_ITEM_CYCLE_INVALID: "Periodicidade do plano ou serviço inválida.",
+      CATALOG_ITEM_NAME_REQUIRED: "Nome do plano ou serviço inválido.",
       "401_TOKEN_MISSING": "401_TOKEN_MISSING",
       "401_TOKEN_INVALID": "401_TOKEN_INVALID",
       "403_COMPANY_NOT_FOUND": "403_COMPANY_NOT_FOUND",

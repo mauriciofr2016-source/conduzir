@@ -4,10 +4,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   isValidWebhookToken,
+  normalizeCatalogItem,
   normalizeCycle,
   parseCompanyUid,
   paymentState,
-  resolveCompanyPaymentState
+  resolveCompanyPaymentState,
+  validateCatalogItemForCheckout
 } = require("../lib/billing");
 const {
   getAsaasBaseUrl,
@@ -18,6 +20,63 @@ test("normaliza ciclos comerciais para o Asaas", () => {
   assert.equal(normalizeCycle("mensal"), "MONTHLY");
   assert.equal(normalizeCycle("trimestral"), "QUARTERLY");
   assert.equal(normalizeCycle("avulso"), "avulso");
+});
+
+test("normaliza contrato de item de catalogo dinamico", () => {
+  const item = normalizeCatalogItem({
+    name: "Plano Teste",
+    price: "1",
+    itemType: "plan",
+    billingCycle: "mensal",
+    permissions: { reports: true }
+  }, "plano-teste");
+  assert.equal(item.id, "plano-teste");
+  assert.equal(item.code, "plano-teste");
+  assert.equal(item.title, "Plano Teste");
+  assert.equal(item.itemType, "plan");
+  assert.equal(item.billingMode, "recurring");
+  assert.equal(item.recurring, true);
+  assert.equal(item.permissions.reports, true);
+});
+
+test("valida plano mensal e servico avulso para checkout", () => {
+  assert.doesNotThrow(() => validateCatalogItemForCheckout(normalizeCatalogItem({
+    title: "Plano Mensal",
+    price: 1,
+    type: "plan",
+    billingCycle: "mensal",
+    active: true
+  }, "plano-mensal")));
+  assert.doesNotThrow(() => validateCatalogItemForCheckout(normalizeCatalogItem({
+    title: "Servico Avulso",
+    price: 99,
+    type: "service",
+    billingCycle: "avulso",
+    active: true
+  }, "servico-avulso")));
+});
+
+test("bloqueia catalogo excluido, inativo ou com preco invalido", () => {
+  assert.throws(() => validateCatalogItemForCheckout(normalizeCatalogItem({
+    title: "Plano Excluido",
+    price: 1,
+    type: "plan",
+    billingCycle: "mensal",
+    deleted: true
+  }, "plano-excluido")), /CATALOG_ITEM_UNAVAILABLE/);
+  assert.throws(() => validateCatalogItemForCheckout(normalizeCatalogItem({
+    title: "Plano Inativo",
+    price: 1,
+    type: "plan",
+    billingCycle: "mensal",
+    active: false
+  }, "plano-inativo")), /CATALOG_ITEM_UNAVAILABLE/);
+  assert.throws(() => validateCatalogItemForCheckout(normalizeCatalogItem({
+    title: "Plano Gratis",
+    price: 0,
+    type: "plan",
+    billingCycle: "mensal"
+  }, "plano-gratis")), /CATALOG_ITEM_PRICE_INVALID/);
 });
 
 test("resolve ambiente e baseURL corretos do Asaas", () => {

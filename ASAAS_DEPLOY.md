@@ -3,7 +3,7 @@
 ## Visão geral
 
 A API Key do Asaas é lida somente pela Firebase Function `createAsaasCheckout`.
-O navegador envia apenas o Firebase ID Token e o código do plano. A Function
+O navegador envia apenas o Firebase ID Token e o `catalogItemId`. A Function
 consulta `catalog_items` no Firestore e usa o preço atual do catálogo para criar
 novas contratações. Assinaturas existentes nunca são reajustadas por esse fluxo.
 
@@ -14,8 +14,9 @@ novas contratações. Assinaturas existentes nunca são reajustadas por esse flu
 - Firebase Authentication e Firestore ativos.
 - Conta Sandbox do Asaas para homologação.
 - Cada plano empresarial publicado como documento em `catalog_items`, com
-  `code`, `type: "plan"`, `audience: "company"`, `price`, `billingCycle` e
-  `active: true`.
+  `code`, `name`/`title`, `type: "plan"`, `itemType: "plan"`,
+  `audience: "company"`, `price`, `billingCycle`, `billingMode`,
+  `recurring`, `permissions` e `active: true`.
 - Empresa com CNPJ/CPF válido salvo em `companies/{uid}`.
 
 ## 1. Instalar e autenticar
