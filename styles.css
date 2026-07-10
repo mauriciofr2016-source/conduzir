@@ -501,9 +501,11 @@ button:disabled { opacity: .72; cursor: not-allowed; }
 .catalog-card.is-inactive{opacity:.72;filter:saturate(.85);}
 .catalog-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;}
 .catalog-card-head h3{margin:10px 0 0;font-size:1.05rem;}
+.catalog-inline-editor{border-top:1px solid var(--line);padding-top:16px;margin-top:8px;}
+.catalog-inline-editor .permissions-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;}
 .catalog-price{display:flex;flex-direction:column;align-items:flex-end;font-size:1.1rem;font-weight:800;white-space:nowrap;}
 .catalog-price small{font-size:.82rem;color:var(--muted);font-weight:600;}
-@media (max-width:720px){.catalog-card-head{flex-direction:column;}.catalog-price{align-items:flex-start;}}
+@media (max-width:720px){.catalog-card-head{flex-direction:column;}.catalog-price{align-items:flex-start;}.catalog-inline-editor .permissions-grid{grid-template-columns:1fr;}}
 
 /* V19 — fluxo profissional candidato / consultora / empresa */
 .candidate-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;}

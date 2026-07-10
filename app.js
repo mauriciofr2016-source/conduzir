@@ -325,6 +325,7 @@ const state = {
   billingSettings: [],
   paymentSessions: [],
   adminUserEditId: null,
+  adminCatalogInlineEditId: null,
   adminUserSearchTerm: "",
   adminManagementSearchTerm: "",
   adminManagementScope: "consultoras",
@@ -1521,6 +1522,49 @@ function renderAdminPlanServiceCatalog() {
     if (audience === "candidate_service") return "Serviço no currículo";
     return "Plano empresa";
   };
+  const billingOptions = ["mensal", "trimestral", "semestral", "anual", "avulso"]
+    .map((cycle) => `<option value="${cycle}">${escapeHtml(getBillingCycleLabel(cycle))}</option>`)
+    .join("");
+  const makeAudienceOptions = (item) => {
+    const audience = getCatalogAudience(item);
+    return [
+      ["company", "Empresa"],
+      ["company_service", "Serviço avulso para empresa"],
+      ["candidate", "Candidato"],
+      ["candidate_service", "Serviço no currículo do candidato"]
+    ].map(([value, label]) => `<option value="${value}" ${audience === value ? "selected" : ""}>${label}</option>`).join("");
+  };
+  const makePermissionFields = (item) => PERMISSION_KEYS.map((key) => `
+    <label class="check-row">
+      <input type="checkbox" name="permissions.${key}" ${item.permissions?.[key] === true ? "checked" : ""} />
+      ${escapeHtml(PERMISSION_LABELS[key] || key)}
+    </label>
+  `).join("");
+  const makeInlineEditor = (item) => `
+    <form class="catalog-inline-editor form-grid top-gap" data-catalog-inline-form>
+      <input type="hidden" name="catalogId" value="${escapeHtml(getCatalogItemId(item))}" />
+      <label><span>Tipo</span><select name="type" required>
+        <option value="plan" ${item.type === "plan" ? "selected" : ""}>Plano</option>
+        <option value="service" ${item.type === "service" ? "selected" : ""}>Serviço adicional</option>
+      </select></label>
+      <label><span>Público / uso</span><select name="audience" required>${makeAudienceOptions(item)}</select></label>
+      <label><span>Título</span><input name="title" value="${escapeHtml(item.title || "")}" required /></label>
+      <label><span>Código interno</span><input name="code" value="${escapeHtml(item.code || "")}" /></label>
+      <label><span>Valor</span><input name="price" value="${escapeHtml(Number(item.price || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}" required /></label>
+      <label><span>Ciclo de cobrança</span><select name="billingCycle">${billingOptions.replace(`value="${item.billingCycle}"`, `value="${item.billingCycle}" selected`)}</select></label>
+      <label><span>Gateway</span><input name="gateway" value="${escapeHtml(item.gateway || "Asaas")}" /></label>
+      <label><span>Status</span><select name="active"><option value="true" ${item.active === false ? "" : "selected"}>Ativo</option><option value="false" ${item.active === false ? "selected" : ""}>Inativo</option></select></label>
+      <label><span>Destaque</span><select name="featured"><option value="false" ${item.featured ? "" : "selected"}>Normal</option><option value="true" ${item.featured ? "selected" : ""}>Mais indicado</option></select></label>
+      <label><span>Ordem de exibição</span><input type="number" name="sortOrder" min="0" value="${escapeHtml(item.sortOrder || 0)}" /></label>
+      <label class="full"><span>Descrição curta</span><input name="shortDescription" value="${escapeHtml(item.shortDescription || "")}" /></label>
+      <label class="full"><span>Descrição completa</span><textarea name="description" rows="3">${escapeHtml(item.description || "")}</textarea></label>
+      <div class="permissions-grid full">${makePermissionFields(item)}</div>
+      <div class="form-actions full">
+        <button type="submit" class="btn btn-primary">Salvar alterações</button>
+        <button type="button" class="btn btn-secondary" data-catalog-action="cancel-inline" data-catalog-id="${escapeHtml(getCatalogItemId(item))}">Cancelar</button>
+      </div>
+    </form>
+  `;
 
   const makeCard = (item) => `
     <article class="catalog-card ${item.active === false ? "is-inactive" : ""}">
@@ -1546,6 +1590,7 @@ function renderAdminPlanServiceCatalog() {
         <button type="button" class="btn btn-secondary" data-catalog-action="toggle" data-catalog-id="${escapeHtml(getCatalogItemId(item))}">${item.active === false ? "Ativar" : "Inativar"}</button>
         <button type="button" class="btn btn-secondary" data-catalog-action="delete" data-catalog-id="${escapeHtml(getCatalogItemId(item))}">Excluir</button>
       </div>
+      ${state.adminCatalogInlineEditId === getCatalogItemId(item) ? makeInlineEditor(item) : ""}
     </article>
   `;
 
@@ -1704,8 +1749,9 @@ function showAdminCatalogNotice(message, type = "success") {
 async function saveCatalogItemRecord(payload) {
   const normalizedType = payload.type === "service" ? "service" : "plan";
   const normalizedAudience = normalizedType === "plan"
-    ? "company"
+    ? (payload.audience || "company")
     : (payload.audience || "candidate_service");
+  const normalizedPrice = normalizePriceInput(payload.price);
   const currentId = `${payload.catalogId || ""}`.trim();
   const source = Array.isArray(state.catalogItems) ? state.catalogItems.map(normalizeCatalogItemRecord) : [];
   const existing = source.find((item) => getCatalogItemId(item) === currentId);
@@ -1717,7 +1763,7 @@ async function saveCatalogItemRecord(payload) {
     code: slugifyCatalogValue(payload.code || payload.title),
     shortDescription: `${payload.shortDescription || ""}`.trim(),
     description: `${payload.description || ""}`.trim(),
-    price: normalizePriceInput(payload.price),
+    price: normalizedPrice > 0 && normalizedPrice < 5 ? 5 : normalizedPrice,
     billingCycle: normalizeCatalogBillingCycle(normalizedType, payload.billingCycle),
     gateway: `${payload.gateway || "Asaas"}`.trim(),
     sortOrder: Number(payload.sortOrder || 0),
@@ -1831,12 +1877,16 @@ function initAdminCatalogManagement() {
     if (!record) return showAdminCatalogNotice("Item não encontrado para esta ação.", "error");
     try {
       if (action === "edit") {
-        fillAdminCatalogForm(record);
-        showAdminCatalogNotice("Item carregado para edição.", "info");
+        state.adminCatalogInlineEditId = getCatalogItemId(record);
+        renderAdminPlanServiceCatalog();
+        showAdminCatalogNotice("Edite e salve o item diretamente no card.", "info");
       } else if (action === "toggle") {
         await toggleCatalogItemRecord(record);
         showAdminCatalogNotice(record.active === false ? "Item reativado com sucesso." : "Item inativado com sucesso.");
         await hydrateInitialData();
+      } else if (action === "cancel-inline") {
+        state.adminCatalogInlineEditId = null;
+        renderAdminPlanServiceCatalog();
       } else if (action === "delete") {
         if (!window.confirm(`Deseja realmente excluir ${record.title || "este item"}?`)) return;
         await deleteCatalogItemRecord(record);
@@ -1846,6 +1896,30 @@ function initAdminCatalogManagement() {
     } catch (error) {
       console.error(error);
       showAdminCatalogNotice(error.message === "COMPANY_PLAN_ACTIVE_REQUIRED" ? "Planos empresariais usados no pagamento Asaas devem permanecer ativos em catalog_items." : "Nao foi possivel concluir essa acao agora.", "error");
+    }
+  });
+
+  document.getElementById("tab-planos")?.addEventListener("submit", async (event) => {
+    const inlineForm = event.target.closest("[data-catalog-inline-form]");
+    if (!inlineForm) return;
+    event.preventDefault();
+    const submit = inlineForm.querySelector('button[type="submit"]');
+    try {
+      setButtonBusy(submit, "Salvando...", submit?.textContent || "Salvar alterações", true);
+      await saveCatalogItemRecord(Object.fromEntries(new FormData(inlineForm).entries()));
+      state.adminCatalogInlineEditId = null;
+      showAdminCatalogNotice("Item salvo com sucesso.");
+      await hydrateInitialData();
+    } catch (error) {
+      console.error(error);
+      const message = error.message === "CATALOG_CODE_EXISTS"
+        ? "Já existe um plano ou serviço com esse código. Ajuste o código e tente novamente."
+        : error.message === "CATALOG_PLAN_REQUIRED_FIELDS"
+          ? "Informe código, título, valor e ciclo de cobrança válidos para salvar."
+          : "Não foi possível salvar o item agora.";
+      showAdminCatalogNotice(message, "error");
+    } finally {
+      setButtonBusy(submit, "Salvando...", "Salvar alterações", false);
     }
   });
 }

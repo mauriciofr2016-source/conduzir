@@ -428,6 +428,9 @@ exports.createAsaasCheckout = onRequest({
       description: `${item.title || item.name} - Conduzir Talentos`.slice(0, 500),
       externalReference
     };
+    if (commonPayload.billingType === "UNDEFINED" && commonPayload.value < 5) {
+      throw Object.assign(new Error("ASAAS_MINIMUM_VALUE_REQUIRED"), { status: 409 });
+    }
 
     let subscription = null;
     let payment = null;
@@ -561,6 +564,7 @@ exports.createAsaasCheckout = onRequest({
       CATALOG_ITEM_CYCLE_INVALID: "Periodicidade do plano ou serviço inválida.",
       CATALOG_ITEM_NAME_REQUIRED: "Nome do plano ou serviço inválido.",
       ASAAS_CHECKOUT_URL_MISSING: "Pagamento criado, mas o Asaas não retornou o link de checkout. Tente novamente em instantes.",
+      ASAAS_MINIMUM_VALUE_REQUIRED: "O valor mínimo para pagamento pelo Asaas é R$ 5,00.",
       "401_TOKEN_MISSING": "401_TOKEN_MISSING",
       "401_TOKEN_INVALID": "401_TOKEN_INVALID",
       "403_COMPANY_NOT_FOUND": "403_COMPANY_NOT_FOUND",
@@ -568,7 +572,7 @@ exports.createAsaasCheckout = onRequest({
       CHECKOUT_IN_PROGRESS: "Já existe uma contratação em andamento."
     };
     return sendError(res, status, error.message || "CHECKOUT_FAILED",
-      publicMessages[error.message] || "Não foi possível iniciar a cobrança.");
+      publicMessages[error.message] || (error.name === "AsaasError" ? error.message : "Não foi possível iniciar a cobrança."));
   }
 });
 
