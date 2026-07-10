@@ -344,13 +344,33 @@ function showGlobalNotice(message) {
   host.innerHTML = `<div class="notice">${message}</div>`;
 }
 
-function createNotice(text, parent) {
+function createNotice(text, parent, type = "success") {
   if (!parent) return;
   const notice = document.createElement("div");
-  notice.className = "notice";
+  notice.className = `notice ${type === "error" ? "is-error" : type === "info" ? "is-info" : ""}`;
   notice.textContent = text;
   parent.prepend(notice);
   setTimeout(() => notice.remove(), 3500);
+}
+
+function focusFirstPendingField(form) {
+  if (!form) return;
+  const field = [...form.querySelectorAll("input, select, textarea")]
+    .find((item) => item.type !== "hidden" && !item.disabled && !item.readOnly && (!item.value || item.required));
+  const target = field || form.querySelector("input:not([type='hidden']), select, textarea, button");
+  if (target && typeof target.focus === "function") {
+    setTimeout(() => target.focus({ preventScroll: true }), 250);
+  }
+}
+
+function revealFormForAction(form, message = "") {
+  if (!form) return;
+  form.classList.remove("is-hidden");
+  form.classList.add("form-action-highlight");
+  form.scrollIntoView({ behavior: "smooth", block: "center" });
+  focusFirstPendingField(form);
+  if (message) createNotice(message, form.parentElement, "info");
+  setTimeout(() => form.classList.remove("form-action-highlight"), 3200);
 }
 
 const localStore = {
@@ -1879,6 +1899,8 @@ function initAdminCatalogManagement() {
       if (action === "edit") {
         state.adminCatalogInlineEditId = getCatalogItemId(record);
         renderAdminPlanServiceCatalog();
+        const inlineForm = document.querySelector("[data-catalog-inline-form]");
+        revealFormForAction(inlineForm, "Edite e salve o item diretamente no card.");
         showAdminCatalogNotice("Edite e salve o item diretamente no card.", "info");
       } else if (action === "toggle") {
         await toggleCatalogItemRecord(record);
@@ -2471,7 +2493,7 @@ function fillConsultantInterviewFormFromCandidate(candidate) {
   const obs = form.elements.namedItem('observacoes');
   if (obs) obs.value = `${billing.interviewMeetMessage || 'Entrevista via Google Meet: clique no link e entre no horário combinado.'}${billing.interviewMeetLink ? `\nLink: ${billing.interviewMeetLink}` : '\nLink: configure o link do Google Meet no painel admin.'}`;
   document.querySelector('[data-tab="agenda"]')?.click();
-  createNotice('Dados do candidato enviados para a agenda. Escolha a data/horário e salve.', form.parentElement);
+  revealFormForAction(form, 'Dados do candidato preenchidos. Escolha data, horário e clique em Salvar entrevista.');
 }
 
 function ensureRescheduleInterviewModal() {
@@ -3870,7 +3892,9 @@ async function readCandidateResumeFile(form) {
       return createNotice("Faça login para solicitar um serviço.", candidateServiceForm.parentElement);
     }
     const payload = Object.fromEntries(new FormData(candidateServiceForm).entries());
+    const button = candidateServiceForm.querySelector('button[type="submit"]');
     try {
+      setButtonBusy(button, "Salvando...", button?.textContent || "Solicitar serviço", true);
       await saveServiceRequest({
         ...payload,
         origin: "candidate",
@@ -3890,6 +3914,8 @@ async function readCandidateResumeFile(form) {
     } catch (error) {
       console.error(error);
       createNotice("Não foi possível enviar a solicitação agora.", candidateServiceForm.parentElement);
+    } finally {
+      setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Solicitar serviço", false);
     }
   });
 
@@ -3901,7 +3927,9 @@ async function readCandidateResumeFile(form) {
     const formData = new FormData(discForm);
     const data = Object.fromEntries(formData.entries());
     const discResult = calculateDiscResult(formData);
+    const button = discForm.querySelector('button[type="submit"]');
     try {
+      setButtonBusy(button, "Salvando...", button?.textContent || "Salvar teste DISC profissional", true);
       await saveCandidateDiscResult({
         ...data,
         candidato: state.currentCandidateProfile?.nome || state.currentCandidateUser?.displayName || "Candidato",
@@ -3937,6 +3965,8 @@ async function readCandidateResumeFile(form) {
     } catch (error) {
       console.error(error);
       createNotice(error?.message === "DISC_ALREADY_COMPLETED" ? "O teste DISC já foi preenchido e não pode ser alterado." : "Não foi possível salvar o teste DISC agora.", discForm.parentElement);
+    } finally {
+      setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Salvar teste DISC profissional", false);
     }
   });
 
@@ -3944,7 +3974,7 @@ async function readCandidateResumeFile(form) {
   document.getElementById("candidateHighlightFab")?.addEventListener("click", (event) => {
     event.preventDefault();
     document.querySelector('[data-tab="servicos"]')?.click();
-    document.getElementById("tab-servicos")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    revealFormForAction(document.getElementById("candidateServiceForm"), "Escolha o serviço desejado, confira seu e-mail e clique em Solicitar serviço.");
   });
 
   if (state.mode === "local") {
@@ -4202,15 +4232,18 @@ function prefillCompanyServiceFromCandidate(action, name, email) {
   if (contato && !contato.value) contato.value = state.currentCompanyProfile?.email || state.currentCompanyUser?.email || "";
   if (mensagem) mensagem.value = `${action} para o candidato ${name}${email ? ` (${email})` : ""}. Toda comunicação deve passar pela consultora.`;
   document.querySelector('[data-tab="contato"]')?.click();
-  createNotice("Solicitação preparada. Confira os dados e clique em Contratar serviço para enviar à consultora.", form.parentElement);
+  revealFormForAction(form, "Solicitação preparada. Confira os dados e clique em Contratar serviço para enviar à consultora.");
 }
 
 function initFeedbackPage() {
   document.getElementById("consultantCandidates")?.addEventListener("click", async (event) => {
     const scheduleButton = event.target.closest("[data-schedule-interview]");
     if (scheduleButton) {
+      if (scheduleButton.disabled) return;
       const candidate = state.candidates.find((item) => `${item.id || item.uid || ""}` === `${scheduleButton.dataset.candidateId || ""}`);
+      setButtonBusy(scheduleButton, "Abrindo agenda...", scheduleButton.textContent || "Agendar entrevista", true);
       fillConsultantInterviewFormFromCandidate(candidate);
+      setTimeout(() => setButtonBusy(scheduleButton, "Abrindo agenda...", scheduleButton.dataset.idleLabel || "Agendar entrevista", false), 900);
       return;
     }
     const button = event.target.closest("[data-candidate-action]");
@@ -4236,7 +4269,9 @@ function initFeedbackPage() {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
+    const button = form.querySelector('button[type="submit"]');
     try {
+      setButtonBusy(button, "Salvando...", button?.textContent || "Salvar parecer", true);
       await saveFeedback({ ...data, email: data.candidateEmail || data.email || "" });
       const candidateEmail = `${data.candidateEmail || data.email || ""}`.toLowerCase();
       const candidate = state.candidates.find((item) => `${item.email || ""}`.toLowerCase() === candidateEmail);
@@ -4262,6 +4297,8 @@ function initFeedbackPage() {
     } catch (error) {
       console.error("Erro ao salvar parecer:", error);
       createNotice("Não foi possível salvar o parecer agora.", form.parentElement);
+    } finally {
+      setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Salvar parecer", false);
     }
   });
 
@@ -4269,13 +4306,17 @@ function initFeedbackPage() {
   noteForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(noteForm).entries());
+    const button = noteForm.querySelector('button[type="submit"]');
     try {
+      setButtonBusy(button, "Salvando...", button?.textContent || "Salvar anotação", true);
       await saveInternalNote(data);
       noteForm.reset();
       createNotice("Anotação interna salva com sucesso.", noteForm.parentElement);
     } catch (error) {
       console.error(error);
       createNotice("Não foi possível salvar a anotação agora.", noteForm.parentElement);
+    } finally {
+      setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Salvar anotação", false);
     }
   });
 
@@ -4380,6 +4421,7 @@ function fillAdminUserForm(user) {
   document.getElementById("adminUserFormTitle") && (document.getElementById("adminUserFormTitle").textContent = `Editando usuário: ${user.nome || user.login || "Sem nome"}`);
   document.getElementById("adminUserSubmitBtn") && (document.getElementById("adminUserSubmitBtn").textContent = "Salvar alterações");
   document.querySelector('[data-tab="perfis"]')?.click();
+  revealFormForAction(document.getElementById("adminUserForm"), "Edite os dados da consultora e clique em Salvar alterações.");
 }
 
 function initAdminUserManagement() {

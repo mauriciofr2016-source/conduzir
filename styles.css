@@ -164,6 +164,9 @@ button, input, textarea, select { font: inherit; }
 .notice {
   padding: 13px 14px; border-radius: 14px; background: var(--moss-soft); border: 1px solid #dfe9d3; color: var(--moss-dark); margin-bottom: 16px;
 }
+.notice.is-info { background: #eef4ff; border-color: #cfdcff; color: #20408f; }
+.notice.is-error { background: #fff0f0; border-color: #f2c7c7; color: #9f2f2f; }
+.form-action-highlight { outline: 3px solid rgba(47,93,52,.28); outline-offset: 6px; border-radius: 18px; transition: outline-color .25s ease, box-shadow .25s ease; box-shadow: 0 0 0 8px rgba(47,93,52,.08); }
 
 @keyframes logoFadeIn {
   0% { opacity: 0; transform: translateY(10px) scale(0.96); }
