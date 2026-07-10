@@ -56,6 +56,30 @@ test("valida plano mensal e servico avulso para checkout", () => {
   }, "servico-avulso")));
 });
 
+test("normaliza ciclos inconsistentes cadastrados pelo admin", () => {
+  const plan = validateCatalogItemForCheckout(normalizeCatalogItem({
+    title: "Plano Corrigido",
+    price: 197,
+    type: "plan",
+    billingCycle: "avulso",
+    active: true
+  }, "plano-corrigido"));
+  assert.equal(plan.billingCycle, "mensal");
+  assert.equal(plan.billingMode, "recurring");
+  assert.equal(plan.recurring, true);
+
+  const service = validateCatalogItemForCheckout(normalizeCatalogItem({
+    title: "Servico Corrigido",
+    price: 300,
+    type: "service",
+    billingCycle: "mensal",
+    active: true
+  }, "servico-corrigido"));
+  assert.equal(service.billingCycle, "avulso");
+  assert.equal(service.billingMode, "one_time");
+  assert.equal(service.recurring, false);
+});
+
 test("bloqueia catalogo excluido, inativo ou com preco invalido", () => {
   assert.throws(() => validateCatalogItemForCheckout(normalizeCatalogItem({
     title: "Plano Excluido",

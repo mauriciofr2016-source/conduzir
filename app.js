@@ -448,8 +448,11 @@ function isPermissionError(error) {
 }
 
 function normalizeCatalogBillingCycle(type, value) {
+  const allowed = new Set(["semanal", "quinzenal", "mensal", "bimestral", "trimestral", "semestral", "anual", "avulso"]);
   const normalized = `${value || (type === "service" ? "avulso" : "mensal")}`.trim().toLowerCase();
-  return type === "service" ? "avulso" : (normalized === "avulso" ? "mensal" : normalized);
+  if (type === "service") return "avulso";
+  if (normalized === "avulso" || !allowed.has(normalized)) return "mensal";
+  return normalized;
 }
 
 function normalizeCatalogItemRecord(item = {}) {
@@ -1287,6 +1290,7 @@ async function loginSystemUser(role, data) {
   state.currentSystemUser = mergedUser;
   localStore.set(KEYS.systemSession, mergedUser);
   syncSystemUiState(role);
+  await hydrateInitialData();
   return mergedUser;
 }
 async function logoutSystemUser(role) {
@@ -4555,12 +4559,6 @@ async function hydrateInitialData() {
   }
 }
 
-function injectRuntimeInfo() {
-  document.querySelectorAll("[data-runtime-mode]").forEach((badge) => {
-    badge.textContent = "Acesso ativo";
-  });
-}
-
 async function init() {
   initMenu();
   initTabs();
@@ -4568,7 +4566,6 @@ async function init() {
   sanitizeCompanyAuthContext();
   if (hasFirebaseConfig()) await setupCloudMode();
   else { state.mode = "local"; showGlobalNotice("Alguns recursos de cadastro podem estar temporariamente indisponíveis."); }
-  injectRuntimeInfo();
   await hydrateInitialData();
   if (state.mode === "cloud" && state.auth && (isCandidatePage() || isCompanyPage())) {
     onAuthStateChanged(state.auth, async (user) => {
@@ -4580,6 +4577,23 @@ async function init() {
         state.currentCompanyUser = user || null;
         await loadCompanyProfileForCurrentUser();
       }
+    });
+  }
+  if (state.mode === "cloud" && state.auth && (isAdminPage() || isConsultantPage())) {
+    onAuthStateChanged(state.auth, async (user) => {
+      const systemSession = localStore.get(KEYS.systemSession, null);
+      const expectedRole = isAdminPage() ? "Administrador" : "Consultora";
+      const validSession = user
+        && systemSession?.perfil === expectedRole
+        && (expectedRole !== "Administrador" || isMasterAdminRecord(systemSession));
+      if (!validSession) return;
+      state.currentSystemUser = {
+        ...systemSession,
+        uid: user.uid,
+        email: user.email || systemSession.email || ""
+      };
+      syncSystemUiState(expectedRole);
+      await hydrateInitialData();
     });
   }
   if (state.mode === "local" && (isAdminPage() || isConsultantPage())) {

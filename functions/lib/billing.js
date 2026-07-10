@@ -11,6 +11,7 @@ const CYCLE_MAP = {
   semestral: "SEMIANNUALLY",
   anual: "YEARLY"
 };
+const CATALOG_BILLING_CYCLES = new Set([...Object.keys(CYCLE_MAP), "avulso"]);
 
 const PAID_STATUSES = new Set(["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"]);
 const DEFAULT_PERMISSIONS = {
@@ -31,6 +32,14 @@ function normalizeCycle(value) {
   return normalized === "avulso" ? "avulso" : (CYCLE_MAP[normalized] || "MONTHLY");
 }
 
+function normalizeCatalogBillingCycle(type, value) {
+  const fallback = type === "service" ? "avulso" : "mensal";
+  const normalized = `${value || fallback}`.trim().toLowerCase();
+  if (type === "service") return "avulso";
+  if (normalized === "avulso" || !CATALOG_BILLING_CYCLES.has(normalized)) return "mensal";
+  return normalized;
+}
+
 function normalizeCatalogCode(value) {
   return `${value || ""}`.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -44,7 +53,7 @@ function normalizePermissions(value = {}) {
 function normalizeCatalogItem(raw = {}, id = "") {
   const type = `${raw.type || raw.itemType || "plan"}`.trim().toLowerCase() === "service" ? "service" : "plan";
   const audience = `${raw.audience || (type === "plan" ? "company" : "company_service")}`.trim().toLowerCase();
-  const billingCycle = `${raw.billingCycle || raw.billingMode || (type === "service" ? "avulso" : "mensal")}`.trim().toLowerCase();
+  const billingCycle = normalizeCatalogBillingCycle(type, raw.billingCycle || raw.billingMode);
   const price = Number(raw.price);
   const code = normalizeCatalogCode(raw.code || id);
   const title = `${raw.title || raw.name || ""}`.trim();
@@ -75,9 +84,10 @@ function validateCatalogItemForCheckout(item = {}) {
   if (!["plan", "service"].includes(item.type)) throw Object.assign(new Error("CATALOG_ITEM_TYPE_INVALID"), { status: 409 });
   if (!item.title) throw Object.assign(new Error("CATALOG_ITEM_NAME_REQUIRED"), { status: 409 });
   if (!Number.isFinite(item.price) || item.price <= 0) throw Object.assign(new Error("CATALOG_ITEM_PRICE_INVALID"), { status: 409 });
+  item.billingCycle = normalizeCatalogBillingCycle(item.type, item.billingCycle);
+  item.billingMode = item.billingCycle === "avulso" ? "one_time" : "recurring";
+  item.recurring = item.type === "plan" && item.billingCycle !== "avulso";
   if (!item.billingCycle) throw Object.assign(new Error("CATALOG_ITEM_CYCLE_INVALID"), { status: 409 });
-  if (item.type === "plan" && item.billingCycle === "avulso") throw Object.assign(new Error("CATALOG_ITEM_CYCLE_INVALID"), { status: 409 });
-  if (item.type === "service" && item.billingCycle !== "avulso") throw Object.assign(new Error("CATALOG_ITEM_CYCLE_INVALID"), { status: 409 });
   return item;
 }
 
@@ -154,6 +164,7 @@ module.exports = {
   digitsOnly,
   isValidWebhookToken,
   makeExternalReference,
+  normalizeCatalogBillingCycle,
   normalizeCatalogCode,
   normalizeCatalogItem,
   normalizeCycle,
