@@ -2611,7 +2611,7 @@ function renderCandidateCards(items, containerId) {
       <p><strong>Resumo:</strong> ${escapeHtml(containerId === "candidateCards" ? publicSummary : (item.resumo || "Sem resumo preenchido."))}</p>
       ${containerId === "consultantCandidates" ? `<details class="resume-toggle-box"><summary>Mostrar mais</summary>${renderProfessionalResumeHtml(item, disc, false)}</details>` : ""}
       ${disc && (containerId === "candidateCards" || containerId === "consultantCandidates") ? renderDiscChartHtml(disc, true) : ""}
-      ${validated ? `<p class="validated-note">âœ“ Selo Validado pela Conduzir</p>` : ""}
+      ${validated ? `<p class="validated-note">✓ Selo Validado pela Conduzir</p>` : ""}
       ${consultantActions}${companyActions}
       ${containerId === "candidateCards" ? renderCandidateLinkedServicesForCompany(item) : ""}
     </article>`;
@@ -2899,7 +2899,7 @@ function renderInterviews(data) {
         <td>
           <div class="interview-status-box"><strong>${escapeHtml(item.status || "—")}</strong>
             <div class="candidate-action-row compact-actions">
-              <button class="btn btn-secondary btn-small ${`${item.status || ""}`.toLowerCase().includes("realizada") ? "is-selected" : ""}" type="button" data-interview-status="Realizada" data-interview-id="${id}">${`${item.status || ""}`.toLowerCase().includes("realizada") ? "âœ“ Realizada" : "Realizada"}</button>
+              <button class="btn btn-secondary btn-small ${`${item.status || ""}`.toLowerCase().includes("realizada") ? "is-selected" : ""}" type="button" data-interview-status="Realizada" data-interview-id="${id}">${`${item.status || ""}`.toLowerCase().includes("realizada") ? "✓ Realizada" : "Realizada"}</button>
               <button class="btn btn-primary btn-small" type="button" data-interview-reschedule="true" data-interview-id="${id}">Reagendar</button>
             </div>
           </div>
@@ -4578,27 +4578,6 @@ function initAdminUserManagement() {
   });
 }
 
-function initAdminActions() {
-  const button = document.getElementById("clearLocalData");
-  if (!button) return;
-  button.addEventListener("click", () => {
-    Object.values(KEYS).forEach((key) => localStore.remove(key));
-    fallbackCandidateRender();
-    fallbackJobRender();
-    fallbackFeedbackRender();
-    fallbackSystemUsersRender();
-    fallbackServiceRequestRender();
-    fallbackInterviewRender();
-    fallbackInternalNotesRender();
-    fallbackCatalogItemsRender();
-    fallbackBillingSettingsRender();
-    fallbackPaymentSessionsRender();
-    clearAdminUserForm();
-    createNotice("Dados locais removidos com sucesso.", button.parentElement);
-  });
-}
-
-
 function initInternalNotesAdminActions() {
   if (!isAdminPage()) return;
   const list = document.getElementById("internalNotesList");
@@ -4760,7 +4739,6 @@ async function init() {
   initAdminBillingSettingsManagement();
   initAdminSupportMeetSettingsManagement();
   initAdminHomeFeaturedSettingsManagement();
-  initAdminActions();
   initInternalNotesAdminActions();
 }
 
