@@ -6,7 +6,7 @@ const { FieldValue, Timestamp, getFirestore } = require("firebase-admin/firestor
 const { onRequest } = require("firebase-functions/v2/https");
 const { defineSecret, defineString } = require("firebase-functions/params");
 const { logger } = require("firebase-functions");
-const { createAsaasClient } = require("./lib/asaas");
+const { createAsaasClient, getAsaasBaseUrl, normalizeAsaasEnvironment } = require("./lib/asaas");
 const {
   addDays,
   digitsOnly,
@@ -362,9 +362,16 @@ exports.createAsaasCheckout = onRequest({
     }
     const company = { uid: auth.uid, ...companyData };
     const billing = billingSnapshot.exists ? billingSnapshot.data() : {};
+    const resolvedAsaasEnvironment = normalizeAsaasEnvironment(asaasEnvironment.value());
+    const resolvedAsaasBaseUrl = getAsaasBaseUrl(resolvedAsaasEnvironment);
+    logger.info("asaasCheckoutConfig", {
+      asaasEnvironment: resolvedAsaasEnvironment,
+      baseURL: resolvedAsaasBaseUrl,
+      apiKeySource: "Firebase Functions Secret Manager: ASAAS_API_KEY"
+    });
     const client = createAsaasClient({
       apiKey: asaasApiKey.value(),
-      environment: asaasEnvironment.value()
+      environment: resolvedAsaasEnvironment
     });
     const customerId = await ensureAsaasCustomer(client, companyRef, company);
     const contractedAt = new Date();

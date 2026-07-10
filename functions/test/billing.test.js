@@ -9,11 +9,23 @@ const {
   paymentState,
   resolveCompanyPaymentState
 } = require("../lib/billing");
+const {
+  getAsaasBaseUrl,
+  normalizeAsaasEnvironment
+} = require("../lib/asaas");
 
 test("normaliza ciclos comerciais para o Asaas", () => {
   assert.equal(normalizeCycle("mensal"), "MONTHLY");
   assert.equal(normalizeCycle("trimestral"), "QUARTERLY");
   assert.equal(normalizeCycle("avulso"), "avulso");
+});
+
+test("resolve ambiente e baseURL corretos do Asaas", () => {
+  assert.equal(normalizeAsaasEnvironment("prod"), "production");
+  assert.equal(normalizeAsaasEnvironment("produção"), "production");
+  assert.equal(normalizeAsaasEnvironment("sandbox"), "sandbox");
+  assert.equal(getAsaasBaseUrl("production"), "https://api.asaas.com/v3");
+  assert.equal(getAsaasBaseUrl("sandbox"), "https://sandbox.asaas.com/api/v3");
 });
 
 test("libera o plano apenas para pagamento confirmado", () => {

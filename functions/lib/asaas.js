@@ -1,9 +1,21 @@
 "use strict";
 
 const BASE_URLS = {
-  sandbox: "https://api-sandbox.asaas.com/v3",
+  sandbox: "https://sandbox.asaas.com/api/v3",
   production: "https://api.asaas.com/v3"
 };
+
+function normalizeAsaasEnvironment(value = "sandbox") {
+  const normalized = `${value || "sandbox"}`.trim().toLowerCase();
+  if (["production", "prod", "producao", "produção", "live"].includes(normalized)) return "production";
+  if (["sandbox", "homologacao", "homologação", "test", "teste"].includes(normalized)) return "sandbox";
+  return normalized;
+}
+
+function getAsaasBaseUrl(environment = "sandbox") {
+  const normalized = normalizeAsaasEnvironment(environment);
+  return BASE_URLS[normalized] || "";
+}
 
 class AsaasError extends Error {
   constructor(message, status, details) {
@@ -15,7 +27,8 @@ class AsaasError extends Error {
 }
 
 function createAsaasClient({ apiKey, environment = "sandbox", fetchImpl = fetch }) {
-  const baseUrl = BASE_URLS[environment];
+  const normalizedEnvironment = normalizeAsaasEnvironment(environment);
+  const baseUrl = getAsaasBaseUrl(normalizedEnvironment);
   if (!baseUrl) throw new Error("ASAAS_ENV_INVALID");
   if (!apiKey) throw new Error("ASAAS_API_KEY_MISSING");
 
@@ -41,6 +54,8 @@ function createAsaasClient({ apiKey, environment = "sandbox", fetchImpl = fetch 
   }
 
   return {
+    environment: normalizedEnvironment,
+    baseUrl,
     createCustomer: (payload) => request("/customers", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -59,4 +74,4 @@ function createAsaasClient({ apiKey, environment = "sandbox", fetchImpl = fetch 
   };
 }
 
-module.exports = { AsaasError, createAsaasClient };
+module.exports = { AsaasError, createAsaasClient, getAsaasBaseUrl, normalizeAsaasEnvironment };
