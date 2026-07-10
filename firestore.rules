@@ -84,7 +84,7 @@ service cloud.firestore {
           "asaasSubscriptionId",
           "asaasPaymentId"
         ]);
-      allow update: if ownsCompany(uid) && financialFieldsUnchanged();
+      allow update, delete: if isAdmin() || (ownsCompany(uid) && financialFieldsUnchanged());
     }
 
     match /catalog_items/{id} {

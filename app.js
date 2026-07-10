@@ -416,6 +416,12 @@ function accountIsRestricted(status) {
   return ["bloqueado", "excluído", "inadimplente", "vencido"].includes(normalized);
 }
 
+function isDeletedRecord(item = {}) {
+  return item.deleted === true
+    || Boolean(item.deletedAt)
+    || normalizeStatusValue(item.status || "").toLowerCase() === "excluído";
+}
+
 
 function formatCurrencyBRL(value) {
   const amount = Number(value || 0);
@@ -2591,7 +2597,7 @@ function renderAdminHomeFeaturedCandidates() {
   const settings = getActiveBillingSettings();
   const auto = settings.homeAutoApproved !== false && settings.homeAutoApproved !== "false";
   const selected = new Set((Array.isArray(settings.homeFeaturedCandidateIds) ? settings.homeFeaturedCandidateIds : []).map(String));
-  const candidates = Array.isArray(state.candidates) ? state.candidates : [];
+  const candidates = (Array.isArray(state.candidates) ? state.candidates : []).filter((item) => !isDeletedRecord(item));
   const autoCheckbox = document.getElementById("homeAutoApproved");
   if (autoCheckbox) autoCheckbox.checked = auto;
   host.innerHTML = candidates.length ? candidates.map((candidate) => {
@@ -2627,9 +2633,11 @@ function initAdminHomeFeaturedSettingsManagement() {
 }
 
 function renderOperationalDashboard() {
-  const totalCandidates = state.candidates.length;
-  const validatedCount = state.candidates.filter(isCandidateValidated).length;
-  const activeCompanies = state.companies.filter((item) => item.planActive === true || item.paymentStatus === "Ativo").length;
+  const visibleCandidates = state.candidates.filter((item) => !isDeletedRecord(item));
+  const visibleCompanies = state.companies.filter((item) => !isDeletedRecord(item));
+  const totalCandidates = visibleCandidates.length;
+  const validatedCount = visibleCandidates.filter(isCandidateValidated).length;
+  const activeCompanies = visibleCompanies.filter((item) => item.planActive === true || item.paymentStatus === "Ativo").length;
   const conversion = totalCandidates ? Math.round((validatedCount / totalCandidates) * 100) : 0;
   const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
   setText("adminValidatedCount", validatedCount);
@@ -2672,10 +2680,11 @@ function renderCandidateLinkedServicesForCompany(candidate) {
 
 function renderCandidateViews(data) {
   state.candidates = Array.isArray(data) ? data : [];
-  const scopedCandidates = getCandidateScopedCandidates(state.candidates);
-  renderCandidateCards(isCompanyPage() && !companyHasCurriculumAccess() ? [] : filterCandidatesForCompany(state.candidates), "candidateCards");
-  renderCandidateCards(state.candidates, "consultantCandidates");
-  renderHomeCandidates(state.candidates);
+  const visibleCandidates = state.candidates.filter((item) => !isDeletedRecord(item));
+  const scopedCandidates = getCandidateScopedCandidates(visibleCandidates);
+  renderCandidateCards(isCompanyPage() && !companyHasCurriculumAccess() ? [] : filterCandidatesForCompany(visibleCandidates), "candidateCards");
+  renderCandidateCards(visibleCandidates, "consultantCandidates");
+  renderHomeCandidates(visibleCandidates);
 
   const preview = document.getElementById("candidateProfilePreview");
   if (preview) {
@@ -2689,15 +2698,15 @@ function renderCandidateViews(data) {
   }
 
   const metricCandidates = document.getElementById("metricCandidates");
-  if (metricCandidates) metricCandidates.textContent = `${state.candidates.length} candidato(s) em acompanhamento.`;
+  if (metricCandidates) metricCandidates.textContent = `${visibleCandidates.length} candidato(s) em acompanhamento.`;
   const adminCandidateCount = document.getElementById("adminCandidateCount");
   const reportCandidates = document.getElementById("reportCandidates");
   const companyReportCandidates = document.getElementById("companyReportCandidates");
   const consultantCandidateCount = document.getElementById("consultantCandidateCount");
-  if (adminCandidateCount) adminCandidateCount.textContent = state.candidates.length;
-  if (reportCandidates) reportCandidates.textContent = state.candidates.length;
-  if (companyReportCandidates) companyReportCandidates.textContent = state.candidates.length;
-  if (consultantCandidateCount) consultantCandidateCount.textContent = state.candidates.length;
+  if (adminCandidateCount) adminCandidateCount.textContent = visibleCandidates.length;
+  if (reportCandidates) reportCandidates.textContent = visibleCandidates.length;
+  if (companyReportCandidates) companyReportCandidates.textContent = visibleCandidates.length;
+  if (consultantCandidateCount) consultantCandidateCount.textContent = visibleCandidates.length;
   renderAdminRegistrations();
   renderCandidateStatus();
   renderOperationalDashboard();
@@ -2881,9 +2890,11 @@ function renderAdminRegistrations() {
     const host = document.getElementById(id);
     if (host) host.innerHTML = html;
   };
+  const visibleCandidates = state.candidates.filter((item) => !isDeletedRecord(item));
+  const visibleCompanies = state.companies.filter((item) => !isDeletedRecord(item));
 
-  const candidateHtml = state.candidates.length ? state.candidates.map((item) => `
-    <article class="stack-item">
+  const candidateHtml = visibleCandidates.length ? visibleCandidates.map((item) => `
+    <article class="stack-item" data-record-type="candidate" data-record-id="${escapeHtml(item.id || "")}">
       <div class="user-item-top">
         <div>
           <strong>${escapeHtml(getAdminCandidateDisplayName(item))}</strong>
@@ -2898,10 +2909,13 @@ function renderAdminRegistrations() {
         <p><strong>Região:</strong> ${escapeHtml(item.regiao || "Não informada")}</p>
       </div>
       <p><strong>Cadastrado em:</strong> ${formatCreatedAt(item.createdAt)}</p>
+      <div class="form-actions compact-actions">
+        <button type="button" class="btn btn-secondary danger-button" data-record-action="delete" data-record-scope="candidatos" data-record-id="${escapeHtml(item.id || "")}">Excluir cadastro</button>
+      </div>
     </article>`).join("") : '<article class="mini-card"><strong>Nenhum candidato cadastrado</strong><p>Os cadastros de candidatos aparecerão aqui automaticamente.</p></article>';
 
-  const companyHtml = state.companies.length ? state.companies.map((item) => `
-    <article class="stack-item">
+  const companyHtml = visibleCompanies.length ? visibleCompanies.map((item) => `
+    <article class="stack-item" data-record-type="company" data-record-id="${escapeHtml(item.id || "")}">
       <div class="user-item-top">
         <div>
           <strong>${escapeHtml(getAdminCompanyDisplayName(item))}</strong>
@@ -2918,23 +2932,26 @@ function renderAdminRegistrations() {
       </div>
       <p><strong>Acesso:</strong> ${escapeHtml(item.planActive || item.paymentStatus === "Ativo" ? "Liberado" : "Bloqueado")}</p>
       <p><strong>Cadastrado em:</strong> ${formatCreatedAt(item.createdAt)}</p>
+      <div class="form-actions compact-actions">
+        <button type="button" class="btn btn-secondary danger-button" data-record-action="delete" data-record-scope="empresas" data-record-id="${escapeHtml(item.id || "")}">Excluir cadastro</button>
+      </div>
     </article>`).join("") : '<article class="mini-card"><strong>Nenhuma empresa cadastrada</strong><p>Os cadastros empresariais aparecerão aqui automaticamente.</p></article>';
 
   ["adminCandidatesList", "adminCandidatesListSecondary"].forEach((id) => renderTarget(id, candidateHtml));
   ["adminCompaniesList", "adminCompaniesListSecondary"].forEach((id) => renderTarget(id, companyHtml));
 
-  document.getElementById("adminCompanyCount") && (document.getElementById("adminCompanyCount").textContent = state.companies.length);
+  document.getElementById("adminCompanyCount") && (document.getElementById("adminCompanyCount").textContent = visibleCompanies.length);
   renderOperationalDashboard();
-  document.getElementById("adminCompaniesBadgeCount") && (document.getElementById("adminCompaniesBadgeCount").textContent = state.companies.length);
-  document.getElementById("adminCandidatesBadgeCount") && (document.getElementById("adminCandidatesBadgeCount").textContent = state.candidates.length);
-  document.getElementById("reportCompanies") && (document.getElementById("reportCompanies").textContent = state.companies.length);
+  document.getElementById("adminCompaniesBadgeCount") && (document.getElementById("adminCompaniesBadgeCount").textContent = visibleCompanies.length);
+  document.getElementById("adminCandidatesBadgeCount") && (document.getElementById("adminCandidatesBadgeCount").textContent = visibleCandidates.length);
+  document.getElementById("reportCompanies") && (document.getElementById("reportCompanies").textContent = visibleCompanies.length);
   renderAdminManagedAccounts();
 }
 
 function getManagedRecordsByScope(scope) {
-  if (scope === "candidatos") return (state.candidates || []).map((item) => ({ ...item, recordType: "candidate" }));
-  if (scope === "empresas") return (state.companies || []).map((item) => ({ ...item, recordType: "company" }));
-  return (state.systemUsers || []).map((item) => ({ ...item, recordType: "consultant" }));
+  if (scope === "candidatos") return (state.candidates || []).filter((item) => !isDeletedRecord(item)).map((item) => ({ ...item, recordType: "candidate" }));
+  if (scope === "empresas") return (state.companies || []).filter((item) => !isDeletedRecord(item)).map((item) => ({ ...item, recordType: "company" }));
+  return (state.systemUsers || []).filter((item) => !isDeletedRecord(item)).map((item) => ({ ...item, recordType: "consultant" }));
 }
 
 function matchesManagementSearch(item, scope, term) {
@@ -3075,6 +3092,7 @@ function renderSystemUsers(data) {
         <p><strong>Perfil:</strong> ${escapeHtml(item.perfil || "Não informado")}</p>
         <p><strong>Login:</strong> ${escapeHtml(item.login || "—")}</p>
         <p><strong>Acesso:</strong> ${isGeneratedSystemAuthEmail(item.email) ? "Usuário + senha" : escapeHtml(item.email || "Usuário + senha")}</p>
+        ${item.perfil === "Administrador" ? "" : `<div class="form-actions compact-actions"><button type="button" class="btn btn-secondary danger-button" data-user-action="delete" data-user-id="${escapeHtml(item.id || "")}">Excluir consultora</button></div>`}
       </article>`).join("") : '<article class="mini-card"><strong>Nenhum usuário criado ainda</strong><p>Cadastre o primeiro login na aba Gestão de Usuários.</p></article>';
   }
   document.getElementById("adminUserCount") && (document.getElementById("adminUserCount").textContent = state.systemUsers.length);
@@ -4429,6 +4447,46 @@ function initAdminUserManagement() {
         console.error(error);
         showAdminUserNotice("Não foi possível excluir esse usuário agora.", "error");
       }
+    }
+  });
+
+  ["adminCandidatesList", "adminCompaniesList", "adminCandidatesListSecondary", "adminCompaniesListSecondary"].forEach((listId) => {
+    document.getElementById(listId)?.addEventListener("click", async (event) => {
+      const recordButton = event.target.closest("[data-record-action]");
+      if (!recordButton || recordButton.dataset.recordAction !== "delete") return;
+      const scope = recordButton.dataset.recordScope;
+      const recordId = recordButton.dataset.recordId;
+      const record = scope === "candidatos"
+        ? state.candidates.find((item) => item.id === recordId)
+        : state.companies.find((item) => item.id === recordId);
+      if (!record) return showAdminUserNotice("Cadastro não encontrado para esta ação.", "error");
+      if (!window.confirm(`Deseja realmente excluir ${scope === "candidatos" ? (record.nome || record.email || "este candidato") : (record.empresa || record.email || "esta empresa")}?`)) return;
+      try {
+        if (scope === "candidatos") await softDeleteCandidateRecord(record);
+        else await softDeleteCompanyRecord(record);
+        showAdminUserNotice("Cadastro excluído da listagem com sucesso.");
+        await hydrateInitialData();
+      } catch (error) {
+        console.error(error);
+        showAdminUserNotice("Não foi possível excluir esse cadastro agora.", "error");
+      }
+    });
+  });
+
+  document.getElementById("adminUsersPreview")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-user-action]");
+    if (!button || button.dataset.userAction !== "delete") return;
+    const userId = button.dataset.userId;
+    const user = state.systemUsers.find((item) => item.id === userId);
+    if (!user || isMasterAdminRecord(user)) return showAdminUserNotice("Usuário não encontrado para esta ação.", "error");
+    if (!window.confirm(`Deseja realmente excluir a consultora ${user.nome || user.login || "selecionada"}?`)) return;
+    try {
+      await deleteSystemUserRecord(userId);
+      showAdminUserNotice("Consultora excluída com sucesso.");
+      await hydrateInitialData();
+    } catch (error) {
+      console.error(error);
+      showAdminUserNotice("Não foi possível excluir essa consultora agora.", "error");
     }
   });
 }
