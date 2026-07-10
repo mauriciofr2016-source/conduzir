@@ -17,6 +17,7 @@ const {
   normalizeCycle,
   normalizePermissions,
   parseCompanyUid,
+  resolveBillingDocument,
   resolveCompanyPaymentState,
   safeDocumentId,
   toDateOnly,
@@ -273,7 +274,7 @@ async function releaseCheckout(companyRef, errorMessage = "") {
   }, { merge: true });
 }
 
-async function ensureAsaasCustomer(client, companyRef, company) {
+async function ensureAsaasCustomer(client, companyRef, company, requestBody = {}) {
   if (company.asaasCustomerId) {
     try {
       await client.getCustomer(company.asaasCustomerId);
@@ -283,8 +284,19 @@ async function ensureAsaasCustomer(client, companyRef, company) {
     }
   }
 
-  const cpfCnpj = digitsOnly(company.cnpj);
-  if (![11, 14].includes(cpfCnpj.length)) {
+  const cpfCnpj = resolveBillingDocument(
+    company.cnpj,
+    company.cpfCnpj,
+    company.cpf,
+    company.documento,
+    company.document,
+    company.billingDocument,
+    requestBody.companyDocument,
+    requestBody.cpfCnpj,
+    requestBody.cnpj,
+    requestBody.cpf
+  );
+  if (!cpfCnpj) {
     throw Object.assign(new Error("COMPANY_DOCUMENT_REQUIRED"), { status: 422 });
   }
   const customer = await client.createCustomer({
@@ -296,6 +308,8 @@ async function ensureAsaasCustomer(client, companyRef, company) {
     notificationDisabled: false
   });
   await companyRef.set({
+    cnpj: cpfCnpj,
+    cpfCnpj,
     asaasCustomerId: customer.id,
     updatedAt: FieldValue.serverTimestamp()
   }, { merge: true });
@@ -407,7 +421,7 @@ exports.createAsaasCheckout = onRequest({
       apiKey: asaasApiKey.value(),
       environment: resolvedAsaasEnvironment
     });
-    const customerId = await ensureAsaasCustomer(client, companyRef, company);
+    const customerId = await ensureAsaasCustomer(client, companyRef, company, req.body || {});
     const contractedAt = new Date();
     const trialDays = Math.max(0, Number(billing.trialDays || 0));
     const dueDate = toDateOnly(addDays(contractedAt, trialDays));

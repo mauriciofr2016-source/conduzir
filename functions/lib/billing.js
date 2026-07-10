@@ -27,6 +27,14 @@ function digitsOnly(value) {
   return `${value || ""}`.replace(/\D/g, "");
 }
 
+function resolveBillingDocument(...values) {
+  for (const value of values) {
+    const document = digitsOnly(value);
+    if ([11, 14].includes(document.length)) return document;
+  }
+  return "";
+}
+
 function normalizeCycle(value) {
   const normalized = `${value || "mensal"}`.trim().toLowerCase();
   return normalized === "avulso" ? "avulso" : (CYCLE_MAP[normalized] || "MONTHLY");
@@ -171,6 +179,7 @@ module.exports = {
   normalizePermissions,
   parseCompanyUid,
   paymentState,
+  resolveBillingDocument,
   resolveCompanyPaymentState,
   safeDocumentId,
   toDateOnly,

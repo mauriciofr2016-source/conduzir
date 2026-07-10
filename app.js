@@ -1113,6 +1113,15 @@ function showCompanyAuthNotice(message, type = "success") {
 }
 function getCurrentCompanyEmail() { return `${state.currentCompanyUser?.email || state.currentCompanyProfile?.email || ""}`.trim().toLowerCase(); }
 function getCurrentCompanyUid() { return `${state.currentCompanyUser?.uid || state.currentCompanyProfile?.uid || ""}`.trim(); }
+function getCompanyBillingDocument() {
+  const profile = state.currentCompanyProfile || {};
+  const values = [profile.cnpj, profile.cpfCnpj, profile.cpf, profile.documento, profile.document, profile.billingDocument];
+  for (const value of values) {
+    const document = `${value || ""}`.replace(/\D/g, "");
+    if ([11, 14].includes(document.length)) return document;
+  }
+  return "";
+}
 async function loadCompanyProfileForCurrentUser() {
   if (!isCompanyPage()) return null;
   if (state.mode === "cloud" && state.firestore && state.currentCompanyUser?.uid) {
@@ -2060,6 +2069,10 @@ async function startProfessionalCheckout(plan, options = {}) {
   const checkoutEndpoint = resolveCheckoutEndpoint(billing.createCheckoutEndpoint, billing);
   if (billing.checkoutMode === "hosted_api" && checkoutEndpoint) {
     try {
+      const companyDocument = getCompanyBillingDocument();
+      if (!companyDocument) {
+        throw new Error("Informe um CPF ou CNPJ válido no cadastro da empresa antes de contratar.");
+      }
       const idToken = await getAuthenticatedCompanyIdToken();
       const secureHeaders = {
         "Content-Type": "application/json",
@@ -2085,6 +2098,8 @@ async function startProfessionalCheckout(plan, options = {}) {
         headers: secureHeaders,
         body: JSON.stringify({
           catalogItemId: sessionPayload.catalogItemId,
+          companyDocument,
+          cnpj: companyDocument,
           serviceContext: options.serviceContext || undefined
         })
       });

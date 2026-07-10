@@ -8,6 +8,7 @@ const {
   normalizeCycle,
   parseCompanyUid,
   paymentState,
+  resolveBillingDocument,
   resolveCompanyPaymentState,
   validateCatalogItemForCheckout
 } = require("../lib/billing");
@@ -148,4 +149,10 @@ test("evento antigo não regride o estado comercial atual", () => {
   );
   assert.equal(result.planActive, true);
   assert.equal(result.paymentStatus, "Ativo");
+});
+
+test("aceita CPF ou CNPJ em campos de cobranca da empresa", () => {
+  assert.equal(resolveBillingDocument("", "123.456.789-09"), "12345678909");
+  assert.equal(resolveBillingDocument(null, "12.345.678/0001-90"), "12345678000190");
+  assert.equal(resolveBillingDocument("1234"), "");
 });
