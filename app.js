@@ -2844,6 +2844,11 @@ function initAdminHomeFeaturedSettingsManagement() {
 
 function initAdminServiceDeliveryManagement() {
   const form = document.getElementById("adminServiceDeliveryForm");
+  document.getElementById("adminServiceQueue")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-service-delivery-start]");
+    if (!button) return;
+    startServiceDeliveryFromQueue(button.dataset.deliveryForm || "adminServiceDeliveryForm", button.dataset.requestId || "");
+  });
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
@@ -3035,6 +3040,9 @@ function renderServiceRequests(data) {
         <p>${escapeHtml(item.mensagem || "Sem mensagem.")}</p>
         <span class="service-status"><strong>Status:</strong> ${escapeHtml(item.deliveryStatus || item.status || "Contratado")}</span>
         ${item.deliveryMessage ? `<p><strong>Devolutiva:</strong> ${escapeHtml(item.deliveryMessage)}</p>` : ""}
+        <div class="form-actions top-gap">
+          <button type="button" class="btn btn-primary btn-small" data-service-delivery-start="true" data-delivery-form="serviceDeliveryForm" data-request-id="${escapeHtml(item.id || "")}">Realizar serviço</button>
+        </div>
       </article>`).join("") : '<article class="mini-card"><strong>Nenhum serviço contratado</strong><p>Quando a empresa contratar um serviço, ele aparecerá aqui automaticamente.</p></article>';
   }
   const adminQueue = document.getElementById("adminServiceQueue");
@@ -3049,6 +3057,9 @@ function renderServiceRequests(data) {
         <p>${escapeHtml(item.mensagem || "Sem mensagem.")}</p>
         <span class="service-status"><strong>Status:</strong> ${escapeHtml(item.deliveryStatus || item.status || "Contratado")}</span>
         ${item.deliveryMessage ? `<p><strong>Devolutiva:</strong> ${escapeHtml(item.deliveryMessage)}</p>` : ""}
+        <div class="form-actions top-gap">
+          <button type="button" class="btn btn-primary btn-small" data-service-delivery-start="true" data-delivery-form="adminServiceDeliveryForm" data-request-id="${escapeHtml(item.id || "")}">Realizar serviço</button>
+        </div>
       </article>`).join("") : '<article class="mini-card"><strong>Nenhuma entrega para o admin</strong><p>Serviços configurados para administração aparecerão aqui.</p></article>';
   }
   document.getElementById("companyReportRequests") && (document.getElementById("companyReportRequests").textContent = state.serviceRequests.filter((item) => item.origin === "company").length);
@@ -3459,6 +3470,18 @@ function buildServiceRequestFromCatalog(item, extra = {}) {
     tipo: catalog.title || extra.tipo || "Serviço",
     ...extra
   };
+}
+
+function startServiceDeliveryFromQueue(formId, requestId) {
+  const form = document.getElementById(formId);
+  if (!form || !requestId) return;
+  const idField = form.querySelector('[name="requestId"]');
+  const statusField = form.querySelector('[name="deliveryStatus"]');
+  const messageField = form.querySelector('[name="deliveryMessage"]');
+  if (idField) idField.value = requestId;
+  if (statusField && !statusField.value) statusField.value = statusField.options?.[0]?.value || "";
+  revealFormForAction(form, "Preencha a devolutiva e salve para aplicar a regra de entrega.");
+  if (messageField) setTimeout(() => messageField.focus({ preventScroll: true }), 300);
 }
 
 async function applyServiceDeliveryCompletion(request, data) {
@@ -4494,6 +4517,11 @@ function initFeedbackPage() {
   consultantLoginForm?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(consultantLoginForm).entries()); const button = consultantLoginForm.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Entrando...", button?.textContent || "Entrar", true); await loginSystemUser("Consultora", data); clearFormFields(consultantLoginForm); showSystemAuthNotice("Consultora", "Login realizado com sucesso. Redirecionando para a área da consultora."); } catch (error) { showSystemAuthNotice("Consultora", "Login ou senha inválidos.", "error"); } finally { setButtonBusy(button, "Entrando...", button?.dataset?.idleLabel || "Entrar", false); } });
   document.getElementById("systemLogoutBtn-consultora")?.addEventListener("click", async () => { await logoutSystemUser("Consultora"); showSystemAuthNotice("Consultora", "Você saiu da área da consultora.", "info"); });
   const deliveryForm = document.getElementById("serviceDeliveryForm");
+  document.getElementById("consultantServiceQueue")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-service-delivery-start]");
+    if (!button) return;
+    startServiceDeliveryFromQueue(button.dataset.deliveryForm || "serviceDeliveryForm", button.dataset.requestId || "");
+  });
   deliveryForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(deliveryForm).entries());
