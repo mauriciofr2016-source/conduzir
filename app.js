@@ -506,6 +506,7 @@ function normalizeCatalogItemRecord(item = {}) {
     billingCycle,
     recurring: type === "plan" && billingCycle !== "avulso",
     permissions: normalizePermissions(item.permissions),
+    deliveryRule: normalizeDeliveryRule(item.deliveryRule || item.fulfillmentRule || {}),
     deleted
   };
 }
@@ -541,6 +542,57 @@ function normalizePermissions(value = {}) {
     acc[key] = value?.[key] === true;
     return acc;
   }, {});
+}
+
+const DELIVERY_ASSIGNEE_LABELS = {
+  consultant: "Consultora",
+  admin: "Administrador",
+  both: "Admin ou consultora"
+};
+
+const DELIVERY_ACTION_LABELS = {
+  none: "Registrar apenas a entrega",
+  candidate_report: "Liberar relatório para o candidato",
+  candidate_feedback: "Salvar parecer no candidato",
+  candidate_resume: "Atualizar currículo do candidato",
+  candidate_status: "Atualizar status do candidato"
+};
+
+function normalizeDeliveryRule(value = {}) {
+  const assignee = ["consultant", "admin", "both"].includes(`${value.assignee || ""}`) ? value.assignee : "consultant";
+  const completionAction = Object.prototype.hasOwnProperty.call(DELIVERY_ACTION_LABELS, value.completionAction) ? value.completionAction : "none";
+  return {
+    assignee,
+    completionAction,
+    exposeToBuyer: value.exposeToBuyer !== false,
+    updateCandidateProfile: value.updateCandidateProfile === true,
+    statusOnComplete: `${value.statusOnComplete || "Serviço concluído"}`.trim()
+  };
+}
+
+function deliveryRuleSummary(rule = {}) {
+  const normalized = normalizeDeliveryRule(rule);
+  const bits = [
+    DELIVERY_ASSIGNEE_LABELS[normalized.assignee] || "Consultora",
+    DELIVERY_ACTION_LABELS[normalized.completionAction] || "Registrar entrega"
+  ];
+  if (normalized.exposeToBuyer) bits.push("visível ao comprador");
+  if (normalized.updateCandidateProfile) bits.push("atualiza perfil");
+  return bits.join(" • ");
+}
+
+function makeDeliveryAssigneeOptions(rule = {}) {
+  const normalized = normalizeDeliveryRule(rule);
+  return Object.entries(DELIVERY_ASSIGNEE_LABELS)
+    .map(([value, label]) => `<option value="${value}" ${normalized.assignee === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
+}
+
+function makeDeliveryActionOptions(rule = {}) {
+  const normalized = normalizeDeliveryRule(rule);
+  return Object.entries(DELIVERY_ACTION_LABELS)
+    .map(([value, label]) => `<option value="${value}" ${normalized.completionAction === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
 }
 
 function getCatalogPermissions(item = {}) {
@@ -1492,6 +1544,17 @@ function renderCandidateHighlightPlans() {
   `).join("") : '<article class="mini-card"><strong>Nenhum plano de candidato ativo</strong><p>O administrador ainda não publicou os planos do botão Quero me destacar.</p></article>';
 }
 
+function renderCandidateServiceOptions() {
+  const select = document.querySelector('#candidateServiceForm select[name="tipo"]');
+  if (!select) return;
+  const catalogServices = [
+    ...getCatalogItemsByAudience("service", "candidate"),
+    ...getCatalogItemsByAudience("service", "candidate_service")
+  ].filter((item, index, arr) => arr.findIndex((other) => getCatalogItemId(other) === getCatalogItemId(item)) === index);
+  if (!catalogServices.length) return;
+  select.innerHTML = catalogServices.map((item) => `<option value="${escapeHtml(item.code || item.title || "")}">${escapeHtml(item.title || "Serviço")}</option>`).join("");
+}
+
 function renderBillingSettings(items) {
   state.billingSettings = Array.isArray(items) && items.length ? items : defaultBillingSettings;
   if (state.mode === "local") localStore.set(KEYS.billingSettings, state.billingSettings);
@@ -1501,6 +1564,7 @@ function renderBillingSettings(items) {
   renderAdminPlanServiceCatalog();
   renderCompanyCatalogSections();
   renderCandidateHighlightPlans();
+  renderCandidateServiceOptions();
   updateNr1FloatingWhatsappButton();
 }
 
@@ -1587,6 +1651,16 @@ function renderAdminPlanServiceCatalog() {
       <label><span>Ordem de exibição</span><input type="number" name="sortOrder" min="0" value="${escapeHtml(item.sortOrder || 0)}" /></label>
       <label class="full"><span>Descrição curta</span><input name="shortDescription" value="${escapeHtml(item.shortDescription || "")}" /></label>
       <label class="full"><span>Descrição completa</span><textarea name="description" rows="3">${escapeHtml(item.description || "")}</textarea></label>
+      <div class="delivery-rule-box full">
+        <strong>Regra de entrega após contratação</strong>
+        <div class="form-grid compact-grid">
+          <label><span>Encaminhar para</span><select name="delivery.assignee">${makeDeliveryAssigneeOptions(item.deliveryRule)}</select></label>
+          <label><span>Ao concluir</span><select name="delivery.completionAction">${makeDeliveryActionOptions(item.deliveryRule)}</select></label>
+          <label><span>Status final</span><input name="delivery.statusOnComplete" value="${escapeHtml(normalizeDeliveryRule(item.deliveryRule).statusOnComplete)}" /></label>
+          <label><span>Visibilidade</span><select name="delivery.exposeToBuyer"><option value="true" ${normalizeDeliveryRule(item.deliveryRule).exposeToBuyer ? "selected" : ""}>Mostrar para comprador</option><option value="false" ${normalizeDeliveryRule(item.deliveryRule).exposeToBuyer ? "" : "selected"}>Somente interno</option></select></label>
+          <label class="check-row full"><input type="checkbox" name="delivery.updateCandidateProfile" ${normalizeDeliveryRule(item.deliveryRule).updateCandidateProfile ? "checked" : ""} /> Atualizar perfil do candidato quando aplicável</label>
+        </div>
+      </div>
       <div class="permissions-grid full">${makePermissionFields(item)}</div>
       <div class="form-actions full">
         <button type="submit" class="btn btn-primary">Salvar alterações</button>
@@ -1612,6 +1686,7 @@ function renderAdminPlanServiceCatalog() {
         <span><strong>Ordem:</strong> ${escapeHtml(item.sortOrder || 0)}</span>
         <span><strong>Status:</strong> ${item.active === false ? "Inativo" : "Ativo"}</span>
         <span><strong>Permissões:</strong> ${escapeHtml(permissionSummary(item.permissions))}</span>
+        <span><strong>Entrega:</strong> ${escapeHtml(deliveryRuleSummary(item.deliveryRule))}</span>
       </div>
       ${item.description ? `<p class="muted-note top-gap">${escapeHtml(item.description)}</p>` : ""}
       <div class="form-actions top-gap">
@@ -1727,6 +1802,7 @@ function renderCatalogItems(items) {
   if (state.mode === "local") localStore.set(KEYS.catalogItems, state.catalogItems);
   renderAdminPlanServiceCatalog();
   renderCompanyCatalogSections();
+  renderCandidateServiceOptions();
 }
 
 function clearAdminCatalogForm() {
@@ -1758,6 +1834,17 @@ function fillAdminCatalogForm(item) {
   form.querySelector('[name="description"]').value = item.description || "";
   form.querySelector('[name="active"]').value = item.active === false ? "false" : "true";
   form.querySelector('[name="featured"]').value = item.featured ? "true" : "false";
+  const deliveryRule = normalizeDeliveryRule(item.deliveryRule);
+  const deliveryAssignee = form.querySelector('[name="delivery.assignee"]');
+  const deliveryAction = form.querySelector('[name="delivery.completionAction"]');
+  const deliveryStatus = form.querySelector('[name="delivery.statusOnComplete"]');
+  const deliveryExpose = form.querySelector('[name="delivery.exposeToBuyer"]');
+  const deliveryUpdateProfile = form.querySelector('[name="delivery.updateCandidateProfile"]');
+  if (deliveryAssignee) deliveryAssignee.value = deliveryRule.assignee;
+  if (deliveryAction) deliveryAction.value = deliveryRule.completionAction;
+  if (deliveryStatus) deliveryStatus.value = deliveryRule.statusOnComplete;
+  if (deliveryExpose) deliveryExpose.value = deliveryRule.exposeToBuyer ? "true" : "false";
+  if (deliveryUpdateProfile) deliveryUpdateProfile.checked = deliveryRule.updateCandidateProfile === true;
   const permissions = getCatalogPermissions(item);
   PERMISSION_KEYS.forEach((key) => {
     const field = form.querySelector(`[name="permissions.${key}"]`);
@@ -1798,6 +1885,13 @@ async function saveCatalogItemRecord(payload) {
     sortOrder: Number(payload.sortOrder || 0),
     active: `${payload.active}` !== "false",
     featured: `${payload.featured}` === "true",
+    deliveryRule: normalizeDeliveryRule({
+      assignee: payload["delivery.assignee"],
+      completionAction: payload["delivery.completionAction"],
+      exposeToBuyer: `${payload["delivery.exposeToBuyer"] || "true"}` !== "false",
+      updateCandidateProfile: payload["delivery.updateCandidateProfile"] === "on",
+      statusOnComplete: payload["delivery.statusOnComplete"]
+    }),
     permissions: normalizePermissions(Object.fromEntries(
       PERMISSION_KEYS.map((key) => [key, payload[`permissions.${key}`] === "on"])
     ))
@@ -2043,6 +2137,8 @@ async function startProfessionalCheckout(plan, options = {}) {
     itemType: plan.type || "plan",
     itemKind,
     permissions: getCatalogPermissions(plan),
+    deliveryRule: normalizeDeliveryRule(plan.deliveryRule),
+    assignedTo: normalizeDeliveryRule(plan.deliveryRule).assignee,
     currency: billing.defaultCurrency || "brl",
     provider: billing.provider || "asaas",
     status: billing.checkoutMode === "hosted_api" ? "Pagamento iniciado" : "Aguardando pagamento",
@@ -2743,6 +2839,35 @@ function initAdminHomeFeaturedSettingsManagement() {
   });
 }
 
+function initAdminServiceDeliveryManagement() {
+  const form = document.getElementById("adminServiceDeliveryForm");
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(form).entries());
+    const button = form.querySelector('button[type="submit"]');
+    try {
+      setButtonBusy(button, "Salvando...", button?.textContent || "Salvar", true);
+      const request = state.serviceRequests.find((item) => `${item.id || ""}` === `${data.requestId || ""}`);
+      if (!request) throw new Error("SERVICE_REQUEST_NOT_FOUND");
+      await updateRecord("serviceRequests", data.requestId, {
+        deliveryStatus: data.deliveryStatus,
+        deliveryMessage: data.deliveryMessage,
+        deliveredBy: state.currentSystemUser?.nome || state.currentSystemUser?.login || "Administrador",
+        deliveredAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString()
+      });
+      await applyServiceDeliveryCompletion({ ...request, id: data.requestId }, data);
+      await hydrateInitialData();
+      clearFormFields(form);
+      createNotice("Dados salvos com sucesso.", form.parentElement);
+    } catch (error) {
+      console.error(error);
+      createNotice(error.message === "SERVICE_REQUEST_NOT_FOUND" ? "Solicitação não encontrada. Confira o ID exibido na fila." : "Não foi possível atualizar o serviço agora.", form.parentElement, "error");
+    } finally {
+      setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Salvar", false);
+    }
+  });
+}
+
 function renderOperationalDashboard() {
   const visibleCandidates = state.candidates.filter((item) => !isDeletedRecord(item));
   const visibleCompanies = state.companies.filter((item) => !isDeletedRecord(item));
@@ -2873,6 +2998,8 @@ function renderServiceRequests(data) {
           <strong>${escapeHtml(item.tipo || "Serviço")}</strong>
           <p><strong>Acesso:</strong> ${isGeneratedSystemAuthEmail(item.email) ? "Usuário + senha" : escapeHtml(item.email || "Usuário + senha")}</p>
           <p>${escapeHtml(item.mensagem || "Sem detalhes adicionais.")}</p>
+          <span class="service-status"><strong>Status:</strong> ${escapeHtml(item.deliveryStatus || item.status || "Solicitado")}</span>
+          ${item.deliveryMessage && normalizeDeliveryRule(item.deliveryRule).exposeToBuyer ? `<p><strong>Entrega:</strong> ${escapeHtml(item.deliveryMessage)}</p>` : ""}
         </article>`).join("")
       : '<article class="mini-card"><strong>Nenhuma solicitação enviada</strong><p>As solicitações de serviços adicionais do seu login aparecerão aqui.</p></article>';
   }
@@ -2894,17 +3021,32 @@ function renderServiceRequests(data) {
 
   const consultantQueue = document.getElementById("consultantServiceQueue");
   if (consultantQueue) {
-    const companyItems = state.serviceRequests.filter((item) => item.origin === "company");
-    consultantQueue.innerHTML = companyItems.length ? companyItems.map((item) => `
+    const queueItems = state.serviceRequests.filter((item) => ["company", "company_candidate_profile", "candidate", "candidate_highlight_plan"].includes(`${item.origin || ""}`));
+    consultantQueue.innerHTML = queueItems.length ? queueItems.map((item) => `
       <article class="stack-item">
-        <strong>${escapeHtml(item.empresa || "Empresa")}</strong> <span class="request-id-badge">${escapeHtml(item.id || "—")}</span>
+        <strong>${escapeHtml(item.empresa || item.candidateName || item.nome || "Solicitação")}</strong> <span class="request-id-badge">${escapeHtml(item.id || "—")}</span>
         <p><strong>Serviço:</strong> ${escapeHtml(item.tipo || "Não informado")}</p>
-        <p><strong>Responsável:</strong> ${escapeHtml(item.responsavel || "Não informado")}</p>
-        <p><strong>Contato:</strong> ${escapeHtml(item.contato || item.contactEmail || "Não informado")}</p>
+        <p><strong>Responsável pela entrega:</strong> ${escapeHtml(DELIVERY_ASSIGNEE_LABELS[normalizeDeliveryRule(item.deliveryRule).assignee] || item.assignedTo || "Consultora")}</p>
+        <p><strong>Ação ao concluir:</strong> ${escapeHtml(DELIVERY_ACTION_LABELS[normalizeDeliveryRule(item.deliveryRule).completionAction] || "Registrar entrega")}</p>
+        <p><strong>Contato:</strong> ${escapeHtml(item.contato || item.contactEmail || item.candidateEmail || item.email || "Não informado")}</p>
         <p>${escapeHtml(item.mensagem || "Sem mensagem.")}</p>
         <span class="service-status"><strong>Status:</strong> ${escapeHtml(item.deliveryStatus || item.status || "Contratado")}</span>
         ${item.deliveryMessage ? `<p><strong>Devolutiva:</strong> ${escapeHtml(item.deliveryMessage)}</p>` : ""}
       </article>`).join("") : '<article class="mini-card"><strong>Nenhum serviço contratado</strong><p>Quando a empresa contratar um serviço, ele aparecerá aqui automaticamente.</p></article>';
+  }
+  const adminQueue = document.getElementById("adminServiceQueue");
+  if (adminQueue) {
+    const adminItems = state.serviceRequests.filter((item) => ["admin", "both"].includes(normalizeDeliveryRule(item.deliveryRule).assignee));
+    adminQueue.innerHTML = adminItems.length ? adminItems.map((item) => `
+      <article class="stack-item">
+        <strong>${escapeHtml(item.empresa || item.candidateName || item.nome || "Solicitação")}</strong> <span class="request-id-badge">${escapeHtml(item.id || "—")}</span>
+        <p><strong>Serviço:</strong> ${escapeHtml(item.tipo || "Não informado")}</p>
+        <p><strong>Ação ao concluir:</strong> ${escapeHtml(DELIVERY_ACTION_LABELS[normalizeDeliveryRule(item.deliveryRule).completionAction] || "Registrar entrega")}</p>
+        <p><strong>Contato:</strong> ${escapeHtml(item.contato || item.contactEmail || item.candidateEmail || item.email || "Não informado")}</p>
+        <p>${escapeHtml(item.mensagem || "Sem mensagem.")}</p>
+        <span class="service-status"><strong>Status:</strong> ${escapeHtml(item.deliveryStatus || item.status || "Contratado")}</span>
+        ${item.deliveryMessage ? `<p><strong>Devolutiva:</strong> ${escapeHtml(item.deliveryMessage)}</p>` : ""}
+      </article>`).join("") : '<article class="mini-card"><strong>Nenhuma entrega para o admin</strong><p>Serviços configurados para administração aparecerão aqui.</p></article>';
   }
   document.getElementById("companyReportRequests") && (document.getElementById("companyReportRequests").textContent = state.serviceRequests.filter((item) => item.origin === "company").length);
 }
@@ -3284,6 +3426,74 @@ async function saveJob(data) {
 async function saveFeedback(data) {
   await saveRecord("feedbacks", data);
   if (state.mode === "local") renderFeedbacks(state.feedbacks);
+}
+
+function findCandidateForServiceRequest(request = {}) {
+  const candidateId = `${request.candidateId || request.candidateUid || request.uid || ""}`;
+  const candidateEmail = `${request.candidateEmail || request.email || ""}`.toLowerCase();
+  return state.candidates.find((item) =>
+    (candidateId && `${item.id || item.uid || ""}` === candidateId)
+    || (candidateEmail && `${item.email || ""}`.toLowerCase() === candidateEmail)
+  ) || null;
+}
+
+function buildServiceRequestFromCatalog(item, extra = {}) {
+  if (!item || (!item.code && !item.id && !item.title && !item.name)) {
+    return {
+      deliveryRule: normalizeDeliveryRule(extra.deliveryRule || {}),
+      assignedTo: normalizeDeliveryRule(extra.deliveryRule || {}).assignee,
+      ...extra
+    };
+  }
+  const catalog = normalizeCatalogItemRecord(item || {});
+  return {
+    catalogItemId: getCatalogItemId(catalog),
+    serviceCode: catalog.code || "",
+    servicePrice: Number(catalog.price || 0),
+    serviceGateway: catalog.gateway || "Asaas",
+    deliveryRule: normalizeDeliveryRule(catalog.deliveryRule),
+    assignedTo: normalizeDeliveryRule(catalog.deliveryRule).assignee,
+    tipo: catalog.title || extra.tipo || "Serviço",
+    ...extra
+  };
+}
+
+async function applyServiceDeliveryCompletion(request, data) {
+  const rule = normalizeDeliveryRule(request.deliveryRule);
+  if (`${data.deliveryStatus || ""}` !== "Concluído") return;
+  const candidate = findCandidateForServiceRequest(request);
+  const message = `${data.deliveryMessage || ""}`.trim();
+  const status = rule.statusOnComplete || "Serviço concluído";
+  const actor = state.currentSystemUser?.nome || state.currentSystemUser?.login || "Conduzir";
+  if (["candidate_report", "candidate_feedback"].includes(rule.completionAction) && (candidate || request.candidateEmail || request.email)) {
+    await saveFeedback({
+      tipo: request.tipo || "Serviço concluído",
+      candidato: candidate?.nome || request.candidateName || request.nome || "Candidato",
+      candidateUid: candidate?.uid || candidate?.id || request.candidateId || request.uid || "",
+      candidateEmail: candidate?.email || request.candidateEmail || request.email || "",
+      email: candidate?.email || request.candidateEmail || request.email || "",
+      status,
+      resultado: rule.completionAction === "candidate_report" ? "Relatório liberado ao candidato" : "Parecer salvo no candidato",
+      parecer: message || "Serviço concluído pela equipe Conduzir.",
+      deliveryRequestId: request.id || "",
+      deliveredBy: actor,
+      visibleToCandidate: rule.exposeToBuyer !== false
+    });
+  }
+  if ((rule.completionAction === "candidate_status" || rule.updateCandidateProfile || rule.completionAction === "candidate_resume") && candidate?.id) {
+    const payload = {
+      candidateStatus: status,
+      lastServiceDeliveredAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString(),
+      lastServiceDeliveredBy: actor,
+      lastServiceDeliveryMessage: message
+    };
+    if (rule.completionAction === "candidate_resume") {
+      payload.curriculoArquivo = message ? `Atualizado pela Conduzir: ${request.tipo || "serviço"}` : (candidate.curriculoArquivo || "Currículo atualizado pela Conduzir");
+      payload.curriculoArquivoNome = payload.curriculoArquivo;
+      payload.curriculoOrientacao = message;
+    }
+    await updateRecord("candidates", candidate.id, payload);
+  }
 }
 
 async function saveCandidateDiscResult(data) {
@@ -3876,10 +4086,9 @@ async function readCandidateResumeFile(form) {
     if (!state.currentCandidateUser && !state.currentCandidateProfile) return createNotice("Faça login para solicitar um plano de destaque.", button.parentElement);
     try {
       setButtonBusy(button, "Enviando...", button.textContent || "Solicitar", true);
-      await saveServiceRequest({
-        tipo: button.dataset.planTitle || "Quero me destacar",
-        serviceCode: button.dataset.candidateHighlightPlan || "",
-        servicePrice: Number(button.dataset.planPrice || 0),
+      const catalogPlan = getCatalogItemByCode(button.dataset.candidateHighlightPlan) || {};
+      await saveServiceRequest(buildServiceRequestFromCatalog(catalogPlan, {
+        tipo: button.dataset.planTitle || catalogPlan.title || "Quero me destacar",
         origin: "candidate_highlight_plan",
         status: "Avaliação solicitada",
         paymentStatus: "Pagamento simbólico pendente",
@@ -3888,7 +4097,7 @@ async function readCandidateResumeFile(form) {
         email: state.currentCandidateUser?.email || state.currentCandidateProfile?.email || "",
         candidateName: state.currentCandidateProfile?.nome || state.currentCandidateUser?.displayName || "",
         mensagem: "Candidato solicitou plano Quero me destacar. Pagamento não garante validação; decisão depende da consultora."
-      });
+      }));
       await updateCurrentCandidateStatus("Avaliação solicitada");
       await hydrateInitialData();
       createNotice("Plano de destaque solicitado. A validação continua dependendo da análise da consultora.", button.parentElement);
@@ -3908,17 +4117,21 @@ async function readCandidateResumeFile(form) {
     }
     const payload = Object.fromEntries(new FormData(candidateServiceForm).entries());
     const button = candidateServiceForm.querySelector('button[type="submit"]');
+    const catalogService = getCatalogItemByCode(payload.tipo) || getCatalogItemsByType("service").find((item) => item.title === payload.tipo) || {};
     try {
       setButtonBusy(button, "Salvando...", button?.textContent || "Solicitar serviço", true);
-      await saveServiceRequest({
+      await saveServiceRequest(buildServiceRequestFromCatalog(catalogService, {
         ...payload,
+        tipo: catalogService.title || payload.tipo,
         origin: "candidate",
         uid: getCurrentCandidateUid(),
+        candidateUid: getCurrentCandidateUid(),
         email: state.currentCandidateUser?.email || payload.email || state.currentCandidateProfile?.email || "",
+        candidateEmail: state.currentCandidateUser?.email || payload.email || state.currentCandidateProfile?.email || "",
         nome: state.currentCandidateProfile?.nome || state.currentCandidateUser?.displayName || "",
         status: payload.tipo?.includes("Quero me destacar") ? "Avaliação solicitada" : "Solicitado",
         paymentStatus: payload.tipo?.includes("Quero me destacar") ? "Pagamento simbólico pendente" : "Pendente"
-      });
+      }));
       if (payload.tipo?.includes("Quero me destacar") && (state.currentCandidateProfile || state.currentCandidateUser)) {
         await persistCandidateProfile({ ...(state.currentCandidateProfile || {}), candidateStatus: "Avaliação solicitada" });
       }
@@ -4189,7 +4402,7 @@ async function readCandidateResumeFile(form) {
     try {
       setButtonBusy(button, "Salvando...", button?.textContent || "Contratar serviço", true);
       const selectedService = getCatalogItemsByType("service").find((item) => item.title === data.tipo) || null;
-      await saveServiceRequest({ ...data, serviceCode: selectedService?.code || "", servicePrice: Number(selectedService?.price || 0), serviceGateway: selectedService?.gateway || "Faturamento manual", origin: "company", status: "Contratado", deliveryStatus: "Contratado", companyUid: getCurrentCompanyUid(), contactEmail: getCurrentCompanyEmail() });
+      await saveServiceRequest(buildServiceRequestFromCatalog(selectedService, { ...data, origin: "company", status: "Contratado", deliveryStatus: "Contratado", companyUid: getCurrentCompanyUid(), contactEmail: getCurrentCompanyEmail() }));
       clearFormFields(companyRequestForm);
       showCompanyAuthNotice("Dados salvos com sucesso. Serviço enviado para a fila da consultora.");
     } catch (error) { console.error(error); createNotice("Não foi possível enviar a solicitação agora.", companyRequestForm.parentElement); }
@@ -4278,7 +4491,31 @@ function initFeedbackPage() {
   consultantLoginForm?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(consultantLoginForm).entries()); const button = consultantLoginForm.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Entrando...", button?.textContent || "Entrar", true); await loginSystemUser("Consultora", data); clearFormFields(consultantLoginForm); showSystemAuthNotice("Consultora", "Login realizado com sucesso. Redirecionando para a área da consultora."); } catch (error) { showSystemAuthNotice("Consultora", "Login ou senha inválidos.", "error"); } finally { setButtonBusy(button, "Entrando...", button?.dataset?.idleLabel || "Entrar", false); } });
   document.getElementById("systemLogoutBtn-consultora")?.addEventListener("click", async () => { await logoutSystemUser("Consultora"); showSystemAuthNotice("Consultora", "Você saiu da área da consultora.", "info"); });
   const deliveryForm = document.getElementById("serviceDeliveryForm");
-  deliveryForm?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(deliveryForm).entries()); const button = deliveryForm.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Salvando...", button?.textContent || "Salvar", true); await updateRecord("serviceRequests", data.requestId, { deliveryStatus: data.deliveryStatus, deliveryMessage: data.deliveryMessage, deliveredBy: state.currentSystemUser?.nome || state.currentSystemUser?.login || "Consultora" }); clearFormFields(deliveryForm); createNotice("Dados salvos com sucesso.", deliveryForm.parentElement); } catch (error) { console.error(error); createNotice("Não foi possível atualizar o serviço agora.", deliveryForm.parentElement); } finally { setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Salvar", false); } });
+  deliveryForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(deliveryForm).entries());
+    const button = deliveryForm.querySelector('button[type="submit"]');
+    try {
+      setButtonBusy(button, "Salvando...", button?.textContent || "Salvar", true);
+      const request = state.serviceRequests.find((item) => `${item.id || ""}` === `${data.requestId || ""}`);
+      if (!request) throw new Error("SERVICE_REQUEST_NOT_FOUND");
+      await updateRecord("serviceRequests", data.requestId, {
+        deliveryStatus: data.deliveryStatus,
+        deliveryMessage: data.deliveryMessage,
+        deliveredBy: state.currentSystemUser?.nome || state.currentSystemUser?.login || "Consultora",
+        deliveredAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString()
+      });
+      await applyServiceDeliveryCompletion({ ...request, id: data.requestId }, data);
+      await hydrateInitialData();
+      clearFormFields(deliveryForm);
+      createNotice("Dados salvos com sucesso.", deliveryForm.parentElement);
+    } catch (error) {
+      console.error(error);
+      createNotice(error.message === "SERVICE_REQUEST_NOT_FOUND" ? "Solicitação não encontrada. Confira o ID exibido na fila." : "Não foi possível atualizar o serviço agora.", deliveryForm.parentElement, "error");
+    } finally {
+      setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Salvar", false);
+    }
+  });
   const form = document.getElementById("feedbackForm");
   if (!form) return;
   form.addEventListener("submit", async (event) => {
@@ -4796,6 +5033,7 @@ async function init() {
   initAdminBillingSettingsManagement();
   initAdminSupportMeetSettingsManagement();
   initAdminHomeFeaturedSettingsManagement();
+  initAdminServiceDeliveryManagement();
   initInternalNotesAdminActions();
 }
 

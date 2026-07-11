@@ -23,6 +23,8 @@ const DEFAULT_PERMISSIONS = {
   reports: false
 };
 
+const DELIVERY_ACTIONS = new Set(["none", "candidate_report", "candidate_feedback", "candidate_resume", "candidate_status"]);
+
 function digitsOnly(value) {
   return `${value || ""}`.replace(/\D/g, "");
 }
@@ -58,6 +60,18 @@ function normalizePermissions(value = {}) {
   );
 }
 
+function normalizeDeliveryRule(value = {}) {
+  const assignee = ["consultant", "admin", "both"].includes(`${value.assignee || ""}`) ? value.assignee : "consultant";
+  const completionAction = DELIVERY_ACTIONS.has(`${value.completionAction || ""}`) ? value.completionAction : "none";
+  return {
+    assignee,
+    completionAction,
+    exposeToBuyer: value.exposeToBuyer !== false,
+    updateCandidateProfile: value.updateCandidateProfile === true,
+    statusOnComplete: `${value.statusOnComplete || "Serviço concluído"}`.trim()
+  };
+}
+
 function normalizeCatalogItem(raw = {}, id = "") {
   const type = `${raw.type || raw.itemType || "plan"}`.trim().toLowerCase() === "service" ? "service" : "plan";
   const audience = `${raw.audience || (type === "plan" ? "company" : "company_service")}`.trim().toLowerCase();
@@ -82,6 +96,7 @@ function normalizeCatalogItem(raw = {}, id = "") {
     billingCycle,
     recurring: type === "plan" && billingCycle !== "avulso",
     permissions: normalizePermissions(raw.permissions),
+    deliveryRule: normalizeDeliveryRule(raw.deliveryRule || raw.fulfillmentRule || {}),
     deleted: Boolean(deleted)
   };
 }
@@ -176,6 +191,7 @@ module.exports = {
   normalizeCatalogCode,
   normalizeCatalogItem,
   normalizeCycle,
+  normalizeDeliveryRule,
   normalizePermissions,
   parseCompanyUid,
   paymentState,

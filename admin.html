@@ -188,6 +188,16 @@
                 <label><span>Status</span><select name="active"><option value="true">Ativo</option><option value="false">Inativo</option></select></label>
                 <label><span>Destaque visual</span><select name="featured"><option value="false">Normal</option><option value="true">Destacado</option></select></label>
                 <label class="full"><span>Descrição curta</span><input type="text" name="shortDescription" placeholder="Texto curto para card e vitrine" /></label>
+                <div class="full delivery-rule-box">
+                  <strong>Regra de entrega apos contratacao</strong>
+                  <div class="form-grid compact-grid">
+                    <label><span>Encaminhar para</span><select name="delivery.assignee"><option value="consultant">Consultora</option><option value="admin">Administrador</option><option value="both">Admin ou consultora</option></select></label>
+                    <label><span>Ao concluir</span><select name="delivery.completionAction"><option value="none">Registrar apenas a entrega</option><option value="candidate_report">Liberar relatorio para o candidato</option><option value="candidate_feedback">Salvar parecer no candidato</option><option value="candidate_resume">Atualizar curriculo do candidato</option><option value="candidate_status">Atualizar status do candidato</option></select></label>
+                    <label><span>Status final</span><input type="text" name="delivery.statusOnComplete" placeholder="Ex.: Servico concluido" /></label>
+                    <label><span>Visibilidade</span><select name="delivery.exposeToBuyer"><option value="true">Mostrar para comprador</option><option value="false">Somente interno</option></select></label>
+                    <label class="check-row full"><input type="checkbox" name="delivery.updateCandidateProfile" /> Atualizar perfil do candidato quando aplicavel</label>
+                  </div>
+                </div>
                 <div class="full check-grid">
                   <label class="check-row"><input type="checkbox" name="permissions.curriculumAccess" /> Banco de Currículos</label>
                   <label class="check-row"><input type="checkbox" name="permissions.selfServiceHiring" /> Seleção por conta própria</label>
@@ -293,6 +303,16 @@
           </div>
           <div class="inline-success is-info top-gap">
             Use esta área para acompanhar os recados internos sem misturar com candidatos, empresas ou planos. As mensagens são salvas na mesma base do sistema e ficam visíveis para o admin.
+          </div>
+          <div class="card nested-card top-gap">
+            <div class="panel-head compact-head"><div><span class="section-tag">Entregas do admin</span><h3>Servicos encaminhados para administracao</h3></div></div>
+            <div id="adminServiceQueue" class="stack-list"></div>
+            <form id="adminServiceDeliveryForm" class="form-grid top-gap">
+              <label><span>ID da solicitacao</span><input name="requestId" required placeholder="Cole o ID exibido acima" /></label>
+              <label><span>Status da entrega</span><select name="deliveryStatus"><option>Em execucao</option><option>Concluido</option><option>Aguardando retorno</option></select></label>
+              <label class="full"><span>Mensagem de devolutiva</span><textarea name="deliveryMessage" rows="4" placeholder="Descreva o andamento ou a entrega do servico."></textarea></label>
+              <div class="full form-actions"><button class="btn btn-primary" type="submit">Atualizar servico</button></div>
+            </form>
           </div>
           <div id="internalNotesList" class="stack-list top-gap"></div>
         </div>

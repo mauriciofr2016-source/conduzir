@@ -156,3 +156,22 @@ test("aceita CPF ou CNPJ em campos de cobranca da empresa", () => {
   assert.equal(resolveBillingDocument(null, "12.345.678/0001-90"), "12345678000190");
   assert.equal(resolveBillingDocument("1234"), "");
 });
+
+test("preserva regra de entrega do item de catalogo", () => {
+  const item = normalizeCatalogItem({
+    title: "Orientacao de carreira",
+    price: 50,
+    type: "service",
+    deliveryRule: {
+      assignee: "admin",
+      completionAction: "candidate_report",
+      exposeToBuyer: true,
+      updateCandidateProfile: true,
+      statusOnComplete: "Relatorio liberado"
+    }
+  }, "orientacao-carreira");
+  assert.equal(item.deliveryRule.assignee, "admin");
+  assert.equal(item.deliveryRule.completionAction, "candidate_report");
+  assert.equal(item.deliveryRule.updateCandidateProfile, true);
+  assert.equal(item.deliveryRule.statusOnComplete, "Relatorio liberado");
+});
