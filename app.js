@@ -191,6 +191,38 @@ const defaultCatalogItems = [
     createdAt: "Cadastro inicial"
   },
   {
+    code: "plano-candidato-curriculo-basico",
+    type: "plan",
+    audience: "candidate",
+    title: "Plano Básico — Elaboração de currículo",
+    shortDescription: "Currículo profissional elaborado a partir do perfil e do DISC.",
+    description: "Revisão e elaboração completa do currículo, com atualização automática do perfil após a entrega.",
+    price: 120,
+    billingCycle: "avulso",
+    gateway: "Asaas",
+    active: true,
+    featured: false,
+    sortOrder: 4,
+    deliveryRule: { assignee: "consultant", completionAction: "candidate_resume", workspaceType: "resume", updateCandidateProfile: true, exposeToBuyer: true, requiresCommunication: false, statusOnComplete: "Currículo atualizado", instructions: "Revisar os dados profissionais, considerar o DISC e elaborar o currículo final." },
+    createdAt: "Cadastro inicial"
+  },
+  {
+    code: "plano-candidato-curriculo-linkedin",
+    type: "plan",
+    audience: "candidate",
+    title: "Plano Avançado — Currículo + LinkedIn",
+    shortDescription: "Elaboração do currículo e criação ou revisão estratégica do LinkedIn.",
+    description: "Inclui currículo completo, orientação segura para criação ou revisão do LinkedIn e atualização do link público no perfil do candidato.",
+    price: 220,
+    billingCycle: "avulso",
+    gateway: "Asaas",
+    active: true,
+    featured: true,
+    sortOrder: 5,
+    deliveryRule: { assignee: "consultant", completionAction: "candidate_resume_linkedin", workspaceType: "resume_linkedin", updateCandidateProfile: true, exposeToBuyer: true, requiresCommunication: true, statusOnComplete: "Currículo e LinkedIn atualizados", instructions: "Elaborar o currículo e orientar a criação ou revisar o LinkedIn sem solicitar ou armazenar senha." },
+    createdAt: "Cadastro inicial"
+  },
+  {
     code: "plano-essencial",
     type: "plan",
     title: "Plano Essencial",
@@ -474,10 +506,11 @@ function isPermissionError(error) {
   return `${error?.code || error?.message || ""}`.toLowerCase().includes("permission");
 }
 
-function normalizeCatalogBillingCycle(type, value) {
+function normalizeCatalogBillingCycle(type, value, audience = "") {
   const allowed = new Set(["semanal", "quinzenal", "mensal", "bimestral", "trimestral", "semestral", "anual", "avulso"]);
   const normalized = `${value || (type === "service" ? "avulso" : "mensal")}`.trim().toLowerCase();
   if (type === "service") return "avulso";
+  if (`${audience}` === "candidate" && normalized === "avulso") return "avulso";
   if (normalized === "avulso" || !allowed.has(normalized)) return "mensal";
   return normalized;
 }
@@ -487,7 +520,7 @@ function normalizeCatalogItemRecord(item = {}) {
   const audience = `${item.audience || (type === "plan" ? "company" : "company_service")}`.trim().toLowerCase();
   const title = `${item.title || item.name || ""}`.trim();
   const code = slugifyCatalogValue(item.code || item.id || title);
-  const billingCycle = normalizeCatalogBillingCycle(type, item.billingCycle || item.billingMode);
+  const billingCycle = normalizeCatalogBillingCycle(type, item.billingCycle || item.billingMode, audience);
   const deleted = item.deleted === true || Boolean(item.deletedAt) || `${item.status || ""}`.trim().toLowerCase() === "excluído";
   const price = normalizePriceInput(item.price);
   return {
@@ -555,8 +588,12 @@ const DELIVERY_ACTION_LABELS = {
   candidate_report: "Liberar relatório para o candidato",
   candidate_feedback: "Salvar parecer no candidato",
   candidate_resume: "Atualizar currículo do candidato",
-  candidate_status: "Atualizar status do candidato"
+  candidate_status: "Atualizar status do candidato",
+  candidate_linkedin: "Atualizar LinkedIn do candidato",
+  candidate_resume_linkedin: "Atualizar currículo e LinkedIn"
 };
+
+const DELIVERY_WORKSPACE_TYPES = ["generic", "resume", "resume_linkedin", "linkedin", "career", "assessment"];
 
 function normalizeDeliveryRule(value = {}) {
   const assignee = ["consultant", "admin", "both"].includes(`${value.assignee || ""}`) ? value.assignee : "consultant";
@@ -564,6 +601,9 @@ function normalizeDeliveryRule(value = {}) {
   return {
     assignee,
     completionAction,
+    workspaceType: DELIVERY_WORKSPACE_TYPES.includes(`${value.workspaceType || ""}`) ? value.workspaceType : "generic",
+    instructions: `${value.instructions || ""}`.trim(),
+    requiresCommunication: value.requiresCommunication === true,
     exposeToBuyer: value.exposeToBuyer !== false,
     updateCandidateProfile: value.updateCandidateProfile === true,
     statusOnComplete: `${value.statusOnComplete || "Serviço concluído"}`.trim()
@@ -578,6 +618,7 @@ function deliveryRuleSummary(rule = {}) {
   ];
   if (normalized.exposeToBuyer) bits.push("visível ao comprador");
   if (normalized.updateCandidateProfile) bits.push("atualiza perfil");
+  if (normalized.requiresCommunication) bits.push("requer contato");
   return bits.join(" • ");
 }
 
@@ -1678,9 +1719,12 @@ function renderAdminPlanServiceCatalog() {
         <div class="form-grid compact-grid">
           <label><span>Encaminhar para</span><select name="delivery.assignee">${makeDeliveryAssigneeOptions(item.deliveryRule)}</select></label>
           <label><span>Ao concluir</span><select name="delivery.completionAction">${makeDeliveryActionOptions(item.deliveryRule)}</select></label>
+          <label><span>Área de trabalho</span><select name="delivery.workspaceType">${DELIVERY_WORKSPACE_TYPES.map((value) => `<option value="${value}" ${normalizeDeliveryRule(item.deliveryRule).workspaceType === value ? "selected" : ""}>${escapeHtml({generic:"Entrega genérica",resume:"Elaboração de currículo",resume_linkedin:"Currículo + LinkedIn",linkedin:"Criação/revisão do LinkedIn",career:"Orientação de carreira",assessment:"Avaliação/relatório"}[value])}</option>`).join("")}</select></label>
           <label><span>Status final</span><input name="delivery.statusOnComplete" value="${escapeHtml(normalizeDeliveryRule(item.deliveryRule).statusOnComplete)}" /></label>
           <label><span>Visibilidade</span><select name="delivery.exposeToBuyer"><option value="true" ${normalizeDeliveryRule(item.deliveryRule).exposeToBuyer ? "selected" : ""}>Mostrar para comprador</option><option value="false" ${normalizeDeliveryRule(item.deliveryRule).exposeToBuyer ? "" : "selected"}>Somente interno</option></select></label>
           <label class="check-row full"><input type="checkbox" name="delivery.updateCandidateProfile" ${normalizeDeliveryRule(item.deliveryRule).updateCandidateProfile ? "checked" : ""} /> Atualizar perfil do candidato quando aplicável</label>
+          <label class="check-row full"><input type="checkbox" name="delivery.requiresCommunication" ${normalizeDeliveryRule(item.deliveryRule).requiresCommunication ? "checked" : ""} /> Precisa de contato/entrevista</label>
+          <label class="full"><span>Instruções operacionais</span><textarea name="delivery.instructions" rows="3">${escapeHtml(normalizeDeliveryRule(item.deliveryRule).instructions)}</textarea></label>
         </div>
       </div>
       <div class="permissions-grid full">${makePermissionFields(item)}</div>
@@ -1862,11 +1906,17 @@ function fillAdminCatalogForm(item) {
   const deliveryStatus = form.querySelector('[name="delivery.statusOnComplete"]');
   const deliveryExpose = form.querySelector('[name="delivery.exposeToBuyer"]');
   const deliveryUpdateProfile = form.querySelector('[name="delivery.updateCandidateProfile"]');
+  const deliveryWorkspace = form.querySelector('[name="delivery.workspaceType"]');
+  const deliveryCommunication = form.querySelector('[name="delivery.requiresCommunication"]');
+  const deliveryInstructions = form.querySelector('[name="delivery.instructions"]');
   if (deliveryAssignee) deliveryAssignee.value = deliveryRule.assignee;
   if (deliveryAction) deliveryAction.value = deliveryRule.completionAction;
   if (deliveryStatus) deliveryStatus.value = deliveryRule.statusOnComplete;
   if (deliveryExpose) deliveryExpose.value = deliveryRule.exposeToBuyer ? "true" : "false";
   if (deliveryUpdateProfile) deliveryUpdateProfile.checked = deliveryRule.updateCandidateProfile === true;
+  if (deliveryWorkspace) deliveryWorkspace.value = deliveryRule.workspaceType;
+  if (deliveryCommunication) deliveryCommunication.checked = deliveryRule.requiresCommunication;
+  if (deliveryInstructions) deliveryInstructions.value = deliveryRule.instructions;
   const permissions = getCatalogPermissions(item);
   PERMISSION_KEYS.forEach((key) => {
     const field = form.querySelector(`[name="permissions.${key}"]`);
@@ -1902,7 +1952,7 @@ async function saveCatalogItemRecord(payload) {
     shortDescription: `${payload.shortDescription || ""}`.trim(),
     description: `${payload.description || ""}`.trim(),
     price: normalizedPrice > 0 && normalizedPrice < 5 ? 5 : normalizedPrice,
-    billingCycle: normalizeCatalogBillingCycle(normalizedType, payload.billingCycle),
+    billingCycle: normalizeCatalogBillingCycle(normalizedType, payload.billingCycle, normalizedAudience),
     gateway: `${payload.gateway || "Asaas"}`.trim(),
     sortOrder: Number(payload.sortOrder || 0),
     active: `${payload.active}` !== "false",
@@ -1910,6 +1960,9 @@ async function saveCatalogItemRecord(payload) {
     deliveryRule: normalizeDeliveryRule({
       assignee: payload["delivery.assignee"],
       completionAction: payload["delivery.completionAction"],
+      workspaceType: payload["delivery.workspaceType"],
+      instructions: payload["delivery.instructions"],
+      requiresCommunication: payload["delivery.requiresCommunication"] === "on",
       exposeToBuyer: `${payload["delivery.exposeToBuyer"] || "true"}` !== "false",
       updateCandidateProfile: payload["delivery.updateCandidateProfile"] === "on",
       statusOnComplete: payload["delivery.statusOnComplete"]
@@ -2876,19 +2929,19 @@ function initAdminServiceDeliveryManagement() {
       setButtonBusy(button, "Salvando...", button?.textContent || "Salvar", true);
       const request = state.serviceRequests.find((item) => `${item.id || ""}` === `${data.requestId || ""}`);
       if (!request) throw new Error("SERVICE_REQUEST_NOT_FOUND");
-      await updateRecord("serviceRequests", data.requestId, {
-        deliveryStatus: data.deliveryStatus,
-        deliveryMessage: data.deliveryMessage,
-        deliveredBy: state.currentSystemUser?.nome || state.currentSystemUser?.login || "Administrador",
-        deliveredAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString()
-      });
+      const actorName = state.currentSystemUser?.nome || state.currentSystemUser?.login || "Administrador";
+      if (request.claimedBy && request.claimedBy !== actorName) throw new Error("SERVICE_ALREADY_CLAIMED");
+      const validationMessage = validateServiceCompletion(request, data);
+      if (validationMessage) throw Object.assign(new Error("SERVICE_VALIDATION"), { userMessage: validationMessage });
+      const actor = actorName;
+      await updateRecord("serviceRequests", data.requestId, buildServiceProgressUpdate(request, data, actor));
       await applyServiceDeliveryCompletion({ ...request, id: data.requestId }, data);
       await hydrateInitialData();
       clearFormFields(form);
       createNotice("Dados salvos com sucesso.", form.parentElement);
     } catch (error) {
       console.error(error);
-      createNotice(error.message === "SERVICE_REQUEST_NOT_FOUND" ? "Solicitação não encontrada. Confira o ID exibido na fila." : "Não foi possível atualizar o serviço agora.", form.parentElement, "error");
+      createNotice(error.userMessage || (error.message === "SERVICE_REQUEST_NOT_FOUND" ? "Solicitação não encontrada. Confira o ID exibido na fila." : error.message === "SERVICE_ALREADY_CLAIMED" ? "Esse serviço já foi assumido por outra pessoa." : "Não foi possível atualizar o serviço agora."), form.parentElement, "error");
     } finally {
       setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Salvar", false);
     }
@@ -3027,6 +3080,8 @@ function renderServiceRequests(data) {
           <p>${escapeHtml(item.mensagem || "Sem detalhes adicionais.")}</p>
           <span class="service-status"><strong>Status:</strong> ${escapeHtml(item.deliveryStatus || item.status || "Solicitado")}</span>
           ${item.deliveryMessage && normalizeDeliveryRule(item.deliveryRule).exposeToBuyer ? `<p><strong>Entrega:</strong> ${escapeHtml(item.deliveryMessage)}</p>` : ""}
+          ${Array.isArray(item.messages) && item.messages.length ? `<div class="service-messages">${item.messages.map((message) => `<p><strong>${escapeHtml(message.author || "Equipe")}:</strong> ${escapeHtml(message.message || "")}</p>`).join("")}</div>` : ""}
+          ${normalizeDeliveryRule(item.deliveryRule).requiresCommunication ? `<form class="service-reply-form" data-service-reply-form data-request-id="${escapeHtml(item.id || "")}"><label><span>Responder à equipe</span><textarea name="message" rows="2" required placeholder="Envie informações do serviço. Nunca envie senhas."></textarea></label><button class="btn btn-secondary btn-small" type="submit">Enviar mensagem</button></form>` : ""}
         </article>`).join("")
       : '<article class="mini-card"><strong>Nenhuma solicitação enviada</strong><p>As solicitações de serviços adicionais do seu login aparecerão aqui.</p></article>';
   }
@@ -3048,7 +3103,8 @@ function renderServiceRequests(data) {
 
   const consultantQueue = document.getElementById("consultantServiceQueue");
   if (consultantQueue) {
-    const queueItems = state.serviceRequests.filter((item) => ["company", "company_candidate_profile", "candidate", "candidate_highlight_plan"].includes(`${item.origin || ""}`));
+    const filter = document.getElementById("consultantServiceFilter")?.value || "open";
+    const queueItems = state.serviceRequests.filter((item) => ["consultant", "both"].includes(normalizeDeliveryRule(item.deliveryRule).assignee) && matchesServiceQueueFilter(item, filter));
     consultantQueue.innerHTML = queueItems.length ? queueItems.map((item) => `
       <article class="stack-item">
         <strong>${escapeHtml(item.empresa || item.candidateName || item.nome || "Solicitação")}</strong> <span class="request-id-badge">${escapeHtml(item.id || "—")}</span>
@@ -3064,9 +3120,14 @@ function renderServiceRequests(data) {
         </div>
       </article>`).join("") : '<article class="mini-card"><strong>Nenhum serviço contratado</strong><p>Quando a empresa contratar um serviço, ele aparecerá aqui automaticamente.</p></article>';
   }
+  const pendingCount = (assignees) => state.serviceRequests.filter((item) => assignees.includes(normalizeDeliveryRule(item.deliveryRule).assignee) && `${item.deliveryStatus || item.status || ""}` !== "Concluído").length;
+  const setServiceBadge = (id, label, count) => { const tab = document.getElementById(id); if (tab) tab.innerHTML = `${label}${count ? ` <span class="tab-notification">${count}</span>` : ""}`; };
+  setServiceBadge("consultantServicesTab", "Serviços Contratados", pendingCount(["consultant", "both"]));
+  setServiceBadge("adminCommunicationTab", "Comunicação Interna", pendingCount(["admin", "both"]));
   const adminQueue = document.getElementById("adminServiceQueue");
   if (adminQueue) {
-    const adminItems = state.serviceRequests.filter((item) => ["admin", "both"].includes(normalizeDeliveryRule(item.deliveryRule).assignee));
+    const filter = document.getElementById("adminServiceFilter")?.value || "open";
+    const adminItems = state.serviceRequests.filter((item) => ["admin", "both"].includes(normalizeDeliveryRule(item.deliveryRule).assignee) && matchesServiceQueueFilter(item, filter));
     adminQueue.innerHTML = adminItems.length ? adminItems.map((item) => `
       <article class="stack-item">
         <strong>${escapeHtml(item.empresa || item.candidateName || item.nome || "Solicitação")}</strong> <span class="request-id-badge">${escapeHtml(item.id || "—")}</span>
@@ -3082,6 +3143,48 @@ function renderServiceRequests(data) {
       </article>`).join("") : '<article class="mini-card"><strong>Nenhuma entrega para o admin</strong><p>Serviços configurados para administração aparecerão aqui.</p></article>';
   }
   document.getElementById("companyReportRequests") && (document.getElementById("companyReportRequests").textContent = state.serviceRequests.filter((item) => item.origin === "company").length);
+}
+
+function matchesServiceQueueFilter(item, filter) {
+  const status = `${item.deliveryStatus || item.status || "Novo"}`;
+  if (filter === "all") return true;
+  if (filter === "open") return status !== "Concluído";
+  return status.includes(filter);
+}
+
+function initServiceCommunication() {
+  ["consultantServiceFilter", "adminServiceFilter"].forEach((id) => document.getElementById(id)?.addEventListener("change", () => renderServiceRequests(state.serviceRequests)));
+  document.getElementById("candidateServiceList")?.addEventListener("submit", async (event) => {
+    const form = event.target.closest("[data-service-reply-form]");
+    if (!form) return;
+    event.preventDefault();
+    const request = state.serviceRequests.find((item) => `${item.id || ""}` === `${form.dataset.requestId || ""}`);
+    const message = `${new FormData(form).get("message") || ""}`.trim();
+    if (!request || !message) return;
+    if (/\b(senha|password|credencial)\b/i.test(message)) return createNotice("Por segurança, não envie senha ou credenciais. Compartilhe somente o link público e as informações do perfil.", form.parentElement, "error");
+    const button = form.querySelector('button[type="submit"]');
+    try {
+      setButtonBusy(button, "Enviando...", "Enviar mensagem", true);
+      const messages = Array.isArray(request.messages) ? [...request.messages] : [];
+      messages.push({ author: state.currentCandidateProfile?.nome || "Candidato", role: "Candidato", message, createdAt: new Date().toISOString() });
+      await updateRecord("serviceRequests", request.id, { messages, updatedAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString() });
+      await hydrateInitialData();
+      createNotice("Mensagem enviada com sucesso.", document.getElementById("candidateServiceList")?.parentElement || document.body);
+    } catch (error) { console.error(error); createNotice("Não foi possível enviar a mensagem agora.", form.parentElement, "error"); }
+    finally { setButtonBusy(button, "Enviando...", "Enviar mensagem", false); }
+  });
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-open-service-agenda]");
+    if (!button) return;
+    const request = state.serviceRequests.find((item) => `${item.id || ""}` === `${button.dataset.openServiceAgenda || ""}`);
+    const candidate = request ? findCandidateForServiceRequest(request) : null;
+    document.querySelector('[data-tab="agenda"]')?.click();
+    const interviewForm = document.getElementById("interviewForm");
+    if (!interviewForm) return;
+    const values = { uid: candidate?.uid || candidate?.id || request?.candidateUid || "", candidato: candidate?.nome || request?.candidateName || request?.nome || "", candidateEmail: candidate?.email || request?.candidateEmail || request?.email || "", empresa: request?.empresa || "Atendimento Conduzir", observacoes: `Atendimento vinculado ao serviço ${request?.tipo || "contratado"} (${request?.id || ""}).` };
+    Object.entries(values).forEach(([name, value]) => { const field = interviewForm.elements.namedItem(name); if (field) field.value = value; });
+    revealFormForAction(interviewForm, "Atendimento preparado. Defina data, horário e salve para notificar o candidato.");
+  });
 }
 
 function renderInterviews(data) {
@@ -3494,13 +3597,88 @@ function buildServiceRequestFromCatalog(item, extra = {}) {
 function startServiceDeliveryFromQueue(formId, requestId) {
   const form = document.getElementById(formId);
   if (!form || !requestId) return;
+  const request = state.serviceRequests.find((item) => `${item.id || ""}` === `${requestId}`);
+  if (!request) return;
   const idField = form.querySelector('[name="requestId"]');
   const statusField = form.querySelector('[name="deliveryStatus"]');
   const messageField = form.querySelector('[name="deliveryMessage"]');
   if (idField) idField.value = requestId;
+  renderServiceWorkspace(form, request);
   if (statusField && !statusField.value) statusField.value = statusField.options?.[0]?.value || "";
   revealFormForAction(form, "Preencha a devolutiva e salve para aplicar a regra de entrega.");
   if (messageField) setTimeout(() => messageField.focus({ preventScroll: true }), 300);
+}
+
+const SERVICE_PROFILE_FIELDS = [
+  ["cargoDesejado", "Cargo desejado", "input"], ["pretensaoSalarial", "Pretensão salarial", "input"],
+  ["disponibilidade", "Disponibilidade", "input"], ["modeloTrabalho", "Modelo de trabalho", "input"],
+  ["resumo", "Resumo profissional", "textarea"], ["experiencias", "Experiências profissionais", "textarea"],
+  ["formacao", "Formação acadêmica", "textarea"], ["cursosCertificacoes", "Cursos e certificações", "textarea"],
+  ["competencias", "Competências técnicas", "textarea"], ["idiomas", "Idiomas", "textarea"],
+  ["valores", "Valores e estilo de trabalho", "textarea"]
+];
+
+function serviceField(key, label, type, value = "") {
+  return `<label class="${type === "textarea" ? "full" : ""}"><span>${label}</span>${type === "textarea" ? `<textarea name="work.${key}" rows="3">${escapeHtml(value)}</textarea>` : `<input name="work.${key}" value="${escapeHtml(value)}">`}</label>`;
+}
+
+function renderServiceWorkspace(form, request) {
+  const host = form.querySelector(".service-workspace");
+  if (!host) return;
+  const candidate = findCandidateForServiceRequest(request);
+  const company = state.companies.find((item) => (request.companyUid && `${item.uid || item.id || ""}` === `${request.companyUid}`) || (request.contactEmail && `${item.email || ""}`.toLowerCase() === `${request.contactEmail}`.toLowerCase()));
+  const rule = normalizeDeliveryRule(request.deliveryRule);
+  const disc = candidate ? getLatestCandidateDisc(candidate) : null;
+  const work = request.workData || {};
+  const resumeFields = ["resume", "resume_linkedin", "career"].includes(rule.workspaceType) && candidate
+    ? SERVICE_PROFILE_FIELDS.map(([key, label, type]) => serviceField(key, label, type, work[key] ?? candidate[key] ?? "")).join("") : "";
+  const linkedinFields = ["linkedin", "resume_linkedin"].includes(rule.workspaceType) ? `
+    <label><span>Situação do LinkedIn</span><select name="work.linkedinStatus"><option value="existing" ${(work.linkedinStatus || candidate?.linkedinStatus) === "existing" ? "selected" : ""}>Já possui perfil — revisar</option><option value="needs_creation" ${(work.linkedinStatus || candidate?.linkedinStatus) === "needs_creation" ? "selected" : ""}>Não possui — orientar criação</option><option value="created" ${(work.linkedinStatus || candidate?.linkedinStatus) === "created" ? "selected" : ""}>Perfil criado</option><option value="revised" ${(work.linkedinStatus || candidate?.linkedinStatus) === "revised" ? "selected" : ""}>Perfil revisado</option></select></label>
+    ${serviceField("linkedinPortfolio", "Link público do LinkedIn", "input", work.linkedinPortfolio ?? candidate?.linkedinPortfolio ?? "")}
+    ${serviceField("linkedinHeadline", "Título profissional do LinkedIn", "input", work.linkedinHeadline ?? candidate?.linkedinHeadline ?? "")}
+    ${serviceField("linkedinAbout", "Seção Sobre", "textarea", work.linkedinAbout ?? candidate?.linkedinAbout ?? "")}
+    ${serviceField("linkedinRecommendations", "Recomendações de melhoria", "textarea", work.linkedinRecommendations ?? candidate?.linkedinRecommendations ?? "")}
+    <div class="full inline-success is-info"><strong>Segurança:</strong> nunca solicite ou registre senha do LinkedIn. O candidato cria a conta e compartilha apenas o link e as informações necessárias.</div>` : "";
+  const specialistFields = rule.workspaceType === "career" ? `${serviceField("careerDiagnosis", "Diagnóstico de carreira", "textarea", work.careerDiagnosis)}${serviceField("careerPlan", "Plano de ação e metas", "textarea", work.careerPlan)}` : rule.workspaceType === "assessment" ? `${serviceField("assessmentResult", "Resultado da avaliação", "textarea", work.assessmentResult)}${serviceField("assessmentRecommendations", "Conclusão e recomendações", "textarea", work.assessmentRecommendations)}` : "";
+  const messages = Array.isArray(request.messages) ? request.messages : [];
+  host.innerHTML = `<div class="service-workspace-head"><div><span class="section-tag">Realizar serviço</span><h3>${escapeHtml(request.tipo || "Serviço")}</h3></div><span class="service-status">${escapeHtml(request.deliveryStatus || request.status || "Novo")}</span></div>
+    <div class="service-workspace-grid"><article class="mini-card"><strong>Solicitante</strong><p>${escapeHtml(candidate?.nome || company?.empresa || company?.nome || request.candidateName || request.empresa || request.nome || "Não informado")}</p><p>${escapeHtml(candidate?.email || company?.email || request.candidateEmail || request.contactEmail || request.email || "Sem contato")}</p></article><article class="mini-card"><strong>Regra do serviço</strong><p>${escapeHtml(deliveryRuleSummary(rule))}</p><p>${escapeHtml(rule.instructions || "Sem instruções adicionais.")}</p></article><article class="mini-card"><strong>Pedido</strong><p>${escapeHtml(request.mensagem || "Sem detalhes adicionais.")}</p></article>${candidate ? `<article class="mini-card"><strong>DISC</strong><p>${escapeHtml(disc?.leituraTecnica || disc?.resultado || "Ainda não preenchido.")}</p></article>` : ""}${company ? `<article class="mini-card"><strong>Empresa</strong><p>${escapeHtml(company.empresa || company.nome || "Empresa")}</p><p>${escapeHtml(company.cnpj || "CNPJ não informado")} • ${escapeHtml(company.telefone || "Telefone não informado")}</p></article>` : ""}</div>
+    ${(resumeFields || linkedinFields || specialistFields) ? `<div class="service-workspace-section"><h4>Informações e elaboração</h4><div class="form-grid">${resumeFields}${linkedinFields}${specialistFields}</div></div>` : ""}
+    ${rule.requiresCommunication ? `<div class="service-conversation"><h4>Comunicação do serviço</h4><div class="service-messages">${messages.length ? messages.map((item) => `<p><strong>${escapeHtml(item.author || "Equipe")}:</strong> ${escapeHtml(item.message || "")}</p>`).join("") : "<p>Nenhuma mensagem ainda.</p>"}</div><label><span>Nova mensagem para o solicitante</span><textarea name="newMessage" rows="2" placeholder="Escreva uma mensagem. Não solicite senhas."></textarea></label>${isConsultantPage() ? `<button type="button" class="btn btn-secondary btn-small" data-open-service-agenda="${escapeHtml(request.id || "")}">Agendar entrevista / atendimento</button>` : ""}</div>` : ""}
+    <div class="inline-success is-info">Use “Em execução” para salvar rascunho. Ao concluir, a ação definida pelo administrador será aplicada automaticamente.</div>`;
+}
+
+function getServiceWorkData(data = {}) {
+  return Object.entries(data).reduce((result, [key, value]) => { if (key.startsWith("work.")) result[key.slice(5)] = `${value || ""}`.trim(); return result; }, {});
+}
+
+function buildServiceProgressUpdate(request, data, actor) {
+  const messages = Array.isArray(request.messages) ? [...request.messages] : [];
+  const newMessage = `${data.newMessage || ""}`.trim();
+  if (newMessage) messages.push({ author: actor, role: state.currentSystemUser?.perfil || "Equipe", message: newMessage, createdAt: new Date().toISOString() });
+  return {
+    deliveryStatus: data.deliveryStatus,
+    deliveryMessage: data.deliveryMessage,
+    workData: getServiceWorkData(data),
+    messages,
+    claimedBy: request.claimedBy || actor,
+    claimedAt: request.claimedAt || new Date().toISOString(),
+    history: [...(Array.isArray(request.history) ? request.history : []), { actor, action: data.deliveryStatus === "Concluído" ? "Serviço concluído" : "Andamento salvo", createdAt: new Date().toISOString() }],
+    deliveredBy: actor,
+    deliveredAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString()
+  };
+}
+
+function validateServiceCompletion(request, data) {
+  if (/\b(senha|password|credencial)\b/i.test(`${data.newMessage || ""}`)) return "Por segurança, não envie nem registre senha ou credenciais na conversa.";
+  if (`${data.deliveryStatus || ""}` !== "Concluído") return "";
+  const rule = normalizeDeliveryRule(request.deliveryRule);
+  const work = getServiceWorkData(data);
+  if (!`${data.deliveryMessage || ""}`.trim()) return "Preencha a mensagem de devolutiva antes de concluir.";
+  if (["linkedin", "resume_linkedin"].includes(rule.workspaceType) && !`${work.linkedinPortfolio || ""}`.trim()) return "Informe o link público do LinkedIn antes de concluir.";
+  if (rule.workspaceType === "career" && (!work.careerDiagnosis || !work.careerPlan)) return "Preencha o diagnóstico e o plano de carreira antes de concluir.";
+  if (rule.workspaceType === "assessment" && !work.assessmentResult) return "Preencha o resultado da avaliação antes de concluir.";
+  return "";
 }
 
 async function applyServiceDeliveryCompletion(request, data) {
@@ -3510,6 +3688,7 @@ async function applyServiceDeliveryCompletion(request, data) {
   const message = `${data.deliveryMessage || ""}`.trim();
   const status = rule.statusOnComplete || "Serviço concluído";
   const actor = state.currentSystemUser?.nome || state.currentSystemUser?.login || "Conduzir";
+  const workData = getServiceWorkData(data);
   if (["candidate_report", "candidate_feedback"].includes(rule.completionAction) && (candidate || request.candidateEmail || request.email)) {
     await saveFeedback({
       tipo: request.tipo || "Serviço concluído",
@@ -3525,18 +3704,23 @@ async function applyServiceDeliveryCompletion(request, data) {
       visibleToCandidate: rule.exposeToBuyer !== false
     });
   }
-  if ((rule.completionAction === "candidate_status" || rule.updateCandidateProfile || rule.completionAction === "candidate_resume") && candidate?.id) {
+  if ((["candidate_status", "candidate_resume", "candidate_linkedin", "candidate_resume_linkedin"].includes(rule.completionAction) || rule.updateCandidateProfile) && candidate?.id) {
     const payload = {
       candidateStatus: status,
       lastServiceDeliveredAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString(),
       lastServiceDeliveredBy: actor,
       lastServiceDeliveryMessage: message
     };
-    if (rule.completionAction === "candidate_resume") {
+    if (["candidate_resume", "candidate_resume_linkedin"].includes(rule.completionAction)) {
+      Object.assign(payload, Object.fromEntries(SERVICE_PROFILE_FIELDS.map(([key]) => [key, workData[key]]).filter(([, value]) => value !== undefined)));
       payload.curriculoArquivo = message ? `Atualizado pela Conduzir: ${request.tipo || "serviço"}` : (candidate.curriculoArquivo || "Currículo atualizado pela Conduzir");
       payload.curriculoArquivoNome = payload.curriculoArquivo;
       payload.curriculoOrientacao = message;
     }
+    if (["candidate_linkedin", "candidate_resume_linkedin"].includes(rule.completionAction) || ["linkedin", "resume_linkedin"].includes(rule.workspaceType)) {
+      ["linkedinPortfolio", "linkedinStatus", "linkedinHeadline", "linkedinAbout", "linkedinRecommendations"].forEach((key) => { if (workData[key] !== undefined) payload[key] = workData[key]; });
+    }
+    if (rule.workspaceType === "career") { payload.careerDiagnosis = workData.careerDiagnosis || ""; payload.careerPlan = workData.careerPlan || ""; }
     await updateRecord("candidates", candidate.id, payload);
   }
 }
@@ -3957,10 +4141,12 @@ function initCandidatePage() {
   function fillCandidateForm(profile) {
     if (!form) return;
     const data = profile || {};
-    ["nome", "email", "telefone", "regiao", "area", "nivel", "cargoDesejado", "pretensaoSalarial", "disponibilidade", "modeloTrabalho", "cnh", "linkedinPortfolio", "resumo", "experiencias", "formacao", "cursosCertificacoes", "competencias", "idiomas", "valores", "curriculoArquivo"].forEach((key) => {
+    ["nome", "email", "telefone", "regiao", "area", "nivel", "cargoDesejado", "pretensaoSalarial", "disponibilidade", "modeloTrabalho", "cnh", "linkedinPortfolio", "linkedinStatus", "resumo", "experiencias", "formacao", "cursosCertificacoes", "competencias", "idiomas", "valores", "curriculoArquivo"].forEach((key) => {
       const field = form.elements.namedItem(key);
       if (field) field.value = data[key] || (key === "email" ? state.currentCandidateUser?.email || "" : "");
     });
+    const linkedinConsent = form.elements.namedItem("linkedinContactConsent");
+    if (linkedinConsent) linkedinConsent.checked = data.linkedinContactConsent === true || data.linkedinContactConsent === "on";
     const curriculoNome = document.getElementById("curriculoNome");
     if (curriculoNome) curriculoNome.textContent = data.curriculoArquivoNome || data.curriculoArquivo || "Nenhum currículo informado.";
     const serviceEmailField = document.querySelector('#candidateServiceForm input[name="email"]');
@@ -4091,6 +4277,7 @@ async function readCandidateResumeFile(form) {
       return showCandidateMessage("Faça login para salvar seu perfil individual.", "error");
     }
     const data = Object.fromEntries(new FormData(form).entries());
+    data.linkedinContactConsent = data.linkedinContactConsent === "on";
     delete data.curriculoArquivoFile;
     const filePayload = await readCandidateResumeFile(form);
     Object.assign(data, filePayload);
@@ -4549,19 +4736,18 @@ function initFeedbackPage() {
       setButtonBusy(button, "Salvando...", button?.textContent || "Salvar", true);
       const request = state.serviceRequests.find((item) => `${item.id || ""}` === `${data.requestId || ""}`);
       if (!request) throw new Error("SERVICE_REQUEST_NOT_FOUND");
-      await updateRecord("serviceRequests", data.requestId, {
-        deliveryStatus: data.deliveryStatus,
-        deliveryMessage: data.deliveryMessage,
-        deliveredBy: state.currentSystemUser?.nome || state.currentSystemUser?.login || "Consultora",
-        deliveredAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString()
-      });
+      const actor = state.currentSystemUser?.nome || state.currentSystemUser?.login || "Consultora";
+      if (request.claimedBy && request.claimedBy !== actor) throw new Error("SERVICE_ALREADY_CLAIMED");
+      const validationMessage = validateServiceCompletion(request, data);
+      if (validationMessage) throw Object.assign(new Error("SERVICE_VALIDATION"), { userMessage: validationMessage });
+      await updateRecord("serviceRequests", data.requestId, buildServiceProgressUpdate(request, data, actor));
       await applyServiceDeliveryCompletion({ ...request, id: data.requestId }, data);
       await hydrateInitialData();
       clearFormFields(deliveryForm);
       createNotice("Dados salvos com sucesso.", deliveryForm.parentElement);
     } catch (error) {
       console.error(error);
-      createNotice(error.message === "SERVICE_REQUEST_NOT_FOUND" ? "Solicitação não encontrada. Confira o ID exibido na fila." : "Não foi possível atualizar o serviço agora.", deliveryForm.parentElement, "error");
+      createNotice(error.userMessage || (error.message === "SERVICE_REQUEST_NOT_FOUND" ? "Solicitação não encontrada. Confira o ID exibido na fila." : error.message === "SERVICE_ALREADY_CLAIMED" ? "Esse serviço já foi assumido por outra pessoa." : "Não foi possível atualizar o serviço agora."), deliveryForm.parentElement, "error");
     } finally {
       setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Salvar", false);
     }
@@ -5084,6 +5270,7 @@ async function init() {
   initAdminSupportMeetSettingsManagement();
   initAdminHomeFeaturedSettingsManagement();
   initAdminServiceDeliveryManagement();
+  initServiceCommunication();
   initInternalNotesAdminActions();
 }
 

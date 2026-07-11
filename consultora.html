@@ -51,7 +51,7 @@
           <button class="tab-btn active" data-tab="painel">Painel Técnico</button>
           <button class="tab-btn" data-tab="candidatos">Candidatos</button>
           <button class="tab-btn" data-tab="pareceres">Testes e Pareceres</button>
-          <button class="tab-btn" data-tab="servicos">Serviços Contratados</button>
+          <button class="tab-btn" data-tab="servicos" id="consultantServicesTab">Serviços Contratados</button>
           <button class="tab-btn" data-tab="anotacoes">Anotações Internas</button>
           <button class="tab-btn" data-tab="agenda">Agenda de Entrevistas</button>
         </div>
@@ -99,10 +99,12 @@
 
         <div class="panel card" id="tab-servicos">
           <div class="panel-head"><div><span class="section-tag">Serviços contratados</span><h2>Fila operacional da consultora</h2></div></div>
+          <label class="queue-filter"><span>Filtrar fila</span><select id="consultantServiceFilter"><option value="open">Novos e em andamento</option><option value="all">Todos</option><option value="Concluído">Concluídos</option><option value="Aguardando">Aguardando retorno</option></select></label>
           <div id="consultantServiceQueue" class="stack-list"></div>
           <div class="card nested-card top-gap">
             <div class="panel-head compact-head"><div><span class="section-tag">Entregar serviço</span><h3>Concluir demanda contratada</h3></div></div>
             <form id="serviceDeliveryForm" class="form-grid">
+              <div class="full service-workspace" id="consultantServiceWorkspace" aria-live="polite"></div>
               <label><span>ID da solicitação</span><input name="requestId" required placeholder="Cole o ID exibido acima" /></label>
               <label><span>Status da entrega</span><select name="deliveryStatus"><option>Em execução</option><option>Concluído</option><option>Aguardando retorno da empresa</option></select></label>
               <label class="full"><span>Mensagem de devolutiva</span><textarea name="deliveryMessage" rows="4" placeholder="Descreva o andamento ou a entrega do serviço."></textarea></label>

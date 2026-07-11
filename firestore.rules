@@ -17,6 +17,24 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function isStaff() {
+      return isAdmin() || (signedIn()
+        && exists(/databases/$(database)/documents/system_users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/system_users/$(request.auth.uid)).data.deleted != true
+        && get(/databases/$(database)/documents/system_users/$(request.auth.uid)).data.status != "Bloqueado");
+    }
+
+    function ownsService(data) {
+      return signedIn() && (
+        data.candidateUid == request.auth.uid
+        || data.uid == request.auth.uid
+        || data.companyUid == request.auth.uid
+        || data.candidateEmail == request.auth.token.email
+        || data.email == request.auth.token.email
+        || data.contactEmail == request.auth.token.email
+      );
+    }
+
     function financialFieldsUnchanged() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         "planCode",
@@ -142,7 +160,11 @@ service cloud.firestore {
     }
 
     match /service_requests/{id} {
-      allow read, write: if signedIn();
+      allow read: if isStaff() || ownsService(resource.data);
+      allow create: if isStaff() || ownsService(request.resource.data);
+      allow update: if isStaff() || (ownsService(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["messages", "updatedAt"]));
+      allow delete: if isAdmin();
     }
 
     match /interviews/{id} {

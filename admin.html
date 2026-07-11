@@ -66,7 +66,7 @@
           <button class="tab-btn" data-tab="planos">Planos e Serviços</button>
           <button class="tab-btn" data-tab="suporte">Editar Suporte / NR1 / Meet</button>
           <button class="tab-btn" data-tab="curriculos-home">Escolher currículos mostrados na página inicial</button>
-          <button class="tab-btn" data-tab="comunicacao">Comunicação Interna</button>
+          <button class="tab-btn" data-tab="comunicacao" id="adminCommunicationTab">Comunicação Interna</button>
           <button class="tab-btn" data-tab="relatorios">Relatórios Estratégicos</button>
         </div>
       </aside>
@@ -192,10 +192,13 @@
                   <strong>Regra de entrega após contratação</strong>
                   <div class="form-grid compact-grid">
                     <label><span>Encaminhar para</span><select name="delivery.assignee"><option value="consultant">Consultora</option><option value="admin">Administrador</option><option value="both">Admin ou consultora</option></select></label>
-                    <label><span>Ao concluir</span><select name="delivery.completionAction"><option value="none">Registrar apenas a entrega</option><option value="candidate_report">Liberar relatório para o candidato</option><option value="candidate_feedback">Salvar parecer no candidato</option><option value="candidate_resume">Atualizar currículo do candidato</option><option value="candidate_status">Atualizar status do candidato</option></select></label>
+                    <label><span>Ao concluir</span><select name="delivery.completionAction"><option value="none">Registrar apenas a entrega</option><option value="candidate_report">Liberar relatório para o candidato</option><option value="candidate_feedback">Salvar parecer no candidato</option><option value="candidate_resume">Atualizar currículo do candidato</option><option value="candidate_linkedin">Atualizar LinkedIn do candidato</option><option value="candidate_resume_linkedin">Atualizar currículo e LinkedIn</option><option value="candidate_status">Atualizar status do candidato</option></select></label>
+                    <label><span>Área de trabalho</span><select name="delivery.workspaceType"><option value="generic">Entrega genérica</option><option value="resume">Elaboração de currículo</option><option value="resume_linkedin">Currículo + LinkedIn</option><option value="linkedin">Criação/revisão do LinkedIn</option><option value="career">Orientação de carreira</option><option value="assessment">Avaliação/relatório</option></select></label>
                     <label><span>Status final</span><input type="text" name="delivery.statusOnComplete" placeholder="Ex.: Serviço concluído" /></label>
                     <label><span>Visibilidade</span><select name="delivery.exposeToBuyer"><option value="true">Mostrar para comprador</option><option value="false">Somente interno</option></select></label>
                     <label class="check-row full"><input type="checkbox" name="delivery.updateCandidateProfile" /> Atualizar perfil do candidato quando aplicável</label>
+                    <label class="check-row full"><input type="checkbox" name="delivery.requiresCommunication" /> Precisa de contato/entrevista com o candidato ou empresa</label>
+                    <label class="full"><span>Instruções para quem realizará o serviço</span><textarea name="delivery.instructions" rows="3" placeholder="Ex.: revisar currículo com base no DISC e entregar uma versão final."></textarea></label>
                   </div>
                 </div>
                 <div class="full check-grid">
@@ -306,8 +309,10 @@
           </div>
           <div class="card nested-card top-gap">
             <div class="panel-head compact-head"><div><span class="section-tag">Entregas do admin</span><h3>Serviços encaminhados para administração</h3></div></div>
+            <label class="queue-filter"><span>Filtrar fila</span><select id="adminServiceFilter"><option value="open">Novos e em andamento</option><option value="all">Todos</option><option value="Concluído">Concluídos</option><option value="Aguardando">Aguardando retorno</option></select></label>
             <div id="adminServiceQueue" class="stack-list"></div>
             <form id="adminServiceDeliveryForm" class="form-grid top-gap">
+              <div class="full service-workspace" id="adminServiceWorkspace" aria-live="polite"></div>
               <label><span>ID da solicitação</span><input name="requestId" required placeholder="Cole o ID exibido acima" /></label>
               <label><span>Status da entrega</span><select name="deliveryStatus"><option>Em execução</option><option>Concluído</option><option>Aguardando retorno</option></select></label>
               <label class="full"><span>Mensagem de devolutiva</span><textarea name="deliveryMessage" rows="4" placeholder="Descreva o andamento ou a entrega do serviço."></textarea></label>
