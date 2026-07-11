@@ -612,7 +612,10 @@ function permissionSummary(permissions = {}) {
 function companyHasPermission(key) {
   const profile = state.currentCompanyProfile || {};
   const recurring = normalizePermissions(profile.recurringPermissions || profile.permissions || {});
-  return profile.planActive === true && recurring[key] === true;
+  if (profile.planActive !== true && profile.paymentStatus !== "Ativo") return false;
+  if (recurring[key] === true) return true;
+  const contractedCatalog = getCatalogItemByCode(profile.catalogItemId || profile.planCode || "");
+  return normalizePermissions(contractedCatalog?.permissions || {})[key] === true;
 }
 
 function getCatalogItemsByAudience(type, audience) {

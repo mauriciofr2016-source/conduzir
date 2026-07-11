@@ -60,6 +60,11 @@ function normalizePermissions(value = {}) {
   );
 }
 
+function resolveCheckoutPermissions(primary, fallback) {
+  const hasPrimary = primary && typeof primary === "object" && Object.keys(primary).length > 0;
+  return normalizePermissions(hasPrimary ? primary : fallback);
+}
+
 function normalizeDeliveryRule(value = {}) {
   const assignee = ["consultant", "admin", "both"].includes(`${value.assignee || ""}`) ? value.assignee : "consultant";
   const completionAction = DELIVERY_ACTIONS.has(`${value.completionAction || ""}`) ? value.completionAction : "none";
@@ -196,6 +201,7 @@ module.exports = {
   parseCompanyUid,
   paymentState,
   resolveBillingDocument,
+  resolveCheckoutPermissions,
   resolveCompanyPaymentState,
   safeDocumentId,
   toDateOnly,

@@ -9,6 +9,7 @@ const {
   parseCompanyUid,
   paymentState,
   resolveBillingDocument,
+  resolveCheckoutPermissions,
   resolveCompanyPaymentState,
   validateCatalogItemForCheckout
 } = require("../lib/billing");
@@ -174,4 +175,25 @@ test("preserva regra de entrega do item de catalogo", () => {
   assert.equal(item.deliveryRule.completionAction, "candidate_report");
   assert.equal(item.deliveryRule.updateCandidateProfile, true);
   assert.equal(item.deliveryRule.statusOnComplete, "Relatorio liberado");
+});
+
+test("recupera permissoes do contrato quando historico do pagamento nao tem permissoes", () => {
+  const permissions = resolveCheckoutPermissions({}, {
+    curriculumAccess: true,
+    reports: true
+  });
+  assert.equal(permissions.curriculumAccess, true);
+  assert.equal(permissions.reports, true);
+});
+
+test("respeita permissoes vazias quando historico tem chaves explicitas", () => {
+  const permissions = resolveCheckoutPermissions({
+    curriculumAccess: false,
+    reports: false
+  }, {
+    curriculumAccess: true,
+    reports: true
+  });
+  assert.equal(permissions.curriculumAccess, false);
+  assert.equal(permissions.reports, false);
 });

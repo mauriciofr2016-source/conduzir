@@ -18,6 +18,7 @@ const {
   normalizePermissions,
   parseCompanyUid,
   resolveBillingDocument,
+  resolveCheckoutPermissions,
   resolveCompanyPaymentState,
   safeDocumentId,
   toDateOnly,
@@ -670,7 +671,7 @@ exports.asaasWebhook = onRequest({
     const existingHistory = await historyRef.get();
     const history = existingHistory.exists ? existingHistory.data() : {};
     const itemKind = history.itemKind || (payment.subscription ? "subscription" : "service");
-    const permissions = normalizePermissions(history.permissions);
+    const permissions = resolveCheckoutPermissions(history.permissions, company.recurringPermissions || company.permissions);
     const latestDueDate = `${payment.dueDate || ""}` >= `${company.lastPaymentDueDate || ""}`
       ? `${payment.dueDate || company.lastPaymentDueDate || ""}`
       : `${company.lastPaymentDueDate || ""}`;
