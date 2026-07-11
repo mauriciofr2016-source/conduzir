@@ -1979,7 +1979,7 @@ function initAdminCatalogManagement() {
       await hydrateInitialData();
     } catch (error) {
       console.error(error);
-      let message = "Nao foi possivel salvar o item agora.";
+      let message = "Não foi possível salvar o item agora.";
       if (error.message === "CATALOG_CODE_EXISTS") {
         message = "Já existe um plano ou serviço com esse código. Ajuste o código e tente novamente.";
       } else if (error.message === "CATALOG_PLAN_REQUIRED_FIELDS") {
@@ -2020,7 +2020,7 @@ function initAdminCatalogManagement() {
       }
     } catch (error) {
       console.error(error);
-      showAdminCatalogNotice(error.message === "COMPANY_PLAN_ACTIVE_REQUIRED" ? "Planos empresariais usados no pagamento Asaas devem permanecer ativos em catalog_items." : "Nao foi possivel concluir essa acao agora.", "error");
+      showAdminCatalogNotice(error.message === "COMPANY_PLAN_ACTIVE_REQUIRED" ? "Planos empresariais usados no pagamento Asaas devem permanecer ativos em catalog_items." : "Não foi possível concluir essa ação agora.", "error");
     }
   });
 
@@ -4238,7 +4238,7 @@ function initJobPage() {
         }
       } catch (error) {
         console.error(error);
-        showCompanyAuthNotice(error?.message || "Nao foi possivel iniciar o pagamento do servico agora.", "error");
+        showCompanyAuthNotice(error?.message || "Não foi possível iniciar o pagamento do serviço agora.", "error");
       } finally {
         setButtonBusy(serviceButton, "Abrindo checkout...", serviceButton.dataset.idleLabel || "Contratar para este candidato", false);
       }
@@ -4334,7 +4334,7 @@ function initJobPage() {
         console.error(error);
         await hydrateInitialData();
         syncCompanyUiState();
-        showCompanyAuthNotice(error?.message || "Nao foi possivel iniciar o pagamento do servico agora.", "error");
+        showCompanyAuthNotice(error?.message || "Não foi possível iniciar o pagamento do serviço agora.", "error");
       } finally {
         setButtonBusy(serviceButton, "Abrindo checkout...", serviceButton.dataset.idleLabel || "Contratar Serviço", false);
       }
