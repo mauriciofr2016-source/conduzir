@@ -1539,7 +1539,7 @@ function renderCandidateHighlightPlans() {
       </div>
       <p>${escapeHtml(item.shortDescription || item.description || "Plano para avaliação profissional do candidato.")}</p>
       ${item.description ? `<p class="muted-note top-gap">${escapeHtml(item.description)}</p>` : ""}
-      <button class="btn btn-primary top-gap" type="button" data-candidate-highlight-plan="${escapeHtml(item.code || item.title || "")}" data-plan-title="${escapeHtml(item.title || "")}" data-plan-price="${escapeHtml(item.price || 0)}">Solicitar este plano</button>
+      <button class="btn btn-primary top-gap" type="button" data-candidate-highlight-plan="${escapeHtml(item.code || item.title || "")}" data-plan-title="${escapeHtml(item.title || "")}" data-plan-price="${escapeHtml(item.price || 0)}">Escolher este plano</button>
     </article>
   `).join("") : '<article class="mini-card"><strong>Nenhum plano de candidato ativo</strong><p>O administrador ainda não publicou os planos do botão Quero me destacar.</p></article>';
 }
@@ -4202,7 +4202,7 @@ async function readCandidateResumeFile(form) {
   document.getElementById("candidateHighlightFab")?.addEventListener("click", (event) => {
     event.preventDefault();
     document.querySelector('[data-tab="servicos"]')?.click();
-    revealFormForAction(document.getElementById("candidateServiceForm"), "Escolha o serviço desejado, confira seu e-mail e clique em Solicitar serviço.");
+    revealFormForAction(document.getElementById("candidateHighlightPlanCards"), "Escolha o plano que mais combina com sua necessidade.");
   });
 
   if (state.mode === "local") {
