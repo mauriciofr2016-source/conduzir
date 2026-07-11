@@ -1369,10 +1369,29 @@ async function loginSystemUser(role, data) {
   if (!identifier || !senha) throw new Error("SYSTEM_LOGIN_INVALID");
   if (!state.auth || state.mode !== "cloud") throw new Error("AUTH_REQUIRED");
 
-  const found = await findSystemUserByIdentifier(identifier, role);
-  if (!found || `${found.status || "Ativo"}` === "Bloqueado" || !found.email) throw new Error("SYSTEM_LOGIN_INVALID");
-  if (role === "Administrador" && !isMasterAdminRecord(found)) throw new Error("SYSTEM_LOGIN_INVALID");
-  const credentials = await signInWithEmailAndPassword(state.auth, `${found.email || ""}`.trim().toLowerCase(), senha);
+  const normalizedIdentifier = identifier.toLowerCase();
+  const authEmail = role === "Administrador"
+    ? MASTER_ADMIN.email
+    : (normalizedIdentifier.includes("@") ? normalizedIdentifier : makeSystemAuthEmail(normalizedIdentifier, role));
+  const credentials = await signInWithEmailAndPassword(state.auth, authEmail, senha);
+  let found = null;
+  try {
+    const profileSnapshot = await getDoc(doc(state.firestore, COLLECTIONS.systemUsers, credentials.user.uid));
+    found = profileSnapshot.exists()
+      ? { id: profileSnapshot.id, ...profileSnapshot.data() }
+      : await findSystemUserByIdentifier(identifier, role);
+    const identifierMatches = `${found?.login || ""}`.trim().toLowerCase() === normalizedIdentifier
+      || `${found?.email || ""}`.trim().toLowerCase() === normalizedIdentifier;
+    const isAllowed = found
+      && identifierMatches
+      && `${found.perfil || ""}` === role
+      && `${found.status || "Ativo"}` !== "Bloqueado"
+      && (role !== "Administrador" || isMasterAdminRecord(found));
+    if (!isAllowed) throw new Error("SYSTEM_LOGIN_INVALID");
+  } catch (error) {
+    try { await signOut(state.auth); } catch {}
+    throw error;
+  }
   const mergedUser = {
     ...found,
     uid: credentials.user.uid,
