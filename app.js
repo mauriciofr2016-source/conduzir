@@ -5,6 +5,7 @@ import {
   addDoc,
   getDocs,
   query,
+  where,
   orderBy,
   serverTimestamp,
   onSnapshot,
@@ -15,6 +16,7 @@ import {
   getDoc,
   deleteField
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 import {
   getAuth,
   createUserWithEmailAndPassword,
@@ -24,15 +26,21 @@ import {
   updateProfile,
   sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getStorage, ref as storageRef, uploadBytes, getBlob } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+const TERMS_VERSION = "1.0-2026-07-12";
+const PRIVACY_VERSION = "1.0-2026-07-12";
 
 const KEYS = {
   candidates: "bt_candidates",
+  candidatePublicProfiles: "bt_candidate_public_profiles",
   jobs: "bt_jobs",
   feedbacks: "bt_feedbacks",
   systemUsers: "bt_system_users",
   serviceRequests: "bt_service_requests",
   interviews: "bt_interviews",
   internalNotes: "bt_internal_notes",
+  privacyRequests: "bt_privacy_requests",
   candidateAuthUser: "bt_candidate_auth_user",
   candidateProfile: "bt_candidate_profile",
   candidateAccounts: "bt_candidate_accounts",
@@ -49,12 +57,14 @@ const KEYS = {
 
 const COLLECTIONS = {
   candidates: "candidates",
+  candidatePublicProfiles: "candidate_public_profiles",
   jobs: "jobs",
   feedbacks: "feedbacks",
   systemUsers: "system_users",
   serviceRequests: "service_requests",
   interviews: "interviews",
   internalNotes: "internal_notes",
+  privacyRequests: "privacy_requests",
   companies: "companies",
   catalogItems: "catalog_items",
   billingSettings: "billing_settings",
@@ -340,6 +350,7 @@ const state = {
   mode: "local",
   firestore: null,
   auth: null,
+  storage: null,
   currentCandidateUser: null,
   currentCandidateProfile: null,
   currentCompanyUser: null,
@@ -356,6 +367,7 @@ const state = {
   catalogItems: [],
   billingSettings: [],
   paymentSessions: [],
+  privacyRequests: [],
   adminUserEditId: null,
   adminCatalogInlineEditId: null,
   adminUserSearchTerm: "",
@@ -749,7 +761,7 @@ async function getAuthenticatedCompanyIdToken() {
     authEmail: authUser.email || "",
     tokenObtained: Boolean(token),
     tokenLength: token?.length || 0,
-    tokenPreview: maskTokenForLog(token)
+    tokenPreview: token ? "[REDACTED]" : ""
   });
   return token;
 }
@@ -1116,6 +1128,7 @@ function syncCandidateUiState() {
     renderServiceRequests(state.serviceRequests);
     renderInterviews(state.interviews);
     renderFeedbacks(state.feedbacks);
+    renderLegalReacceptance("candidate", state.currentCandidateProfile);
   }
 }
 
@@ -1179,6 +1192,10 @@ async function persistCandidateProfile(data) {
       createdAt: existing.exists() ? (existing.data().createdAt || serverTimestamp()) : serverTimestamp(),
       updatedAt: serverTimestamp()
     }, { merge: true });
+    if (payload.employerVisibilityConsent === false) {
+      try { await deleteDoc(doc(state.firestore, COLLECTIONS.candidatePublicProfiles, payload.uid)); }
+      catch (error) { if (!isPermissionError(error)) console.error("Não foi possível revogar a vitrine do perfil:", error); }
+    }
     state.currentCandidateProfile = { id: payload.uid, ...(existing.exists() ? existing.data() : {}), ...payload };
     return;
   }
@@ -1268,6 +1285,35 @@ function syncCompanyUiState() {
   renderCandidateViews(state.candidates);
   renderJobs(state.jobs.length ? state.jobs : defaultJobs);
   renderServiceRequests(state.serviceRequests);
+  renderLegalReacceptance("company", state.currentCompanyProfile);
+}
+
+function renderLegalReacceptance(type, profile) {
+  const existing = document.getElementById("legalReacceptanceModal");
+  const current = profile && profile.termsVersion === TERMS_VERSION && profile.privacyVersion === PRIVACY_VERSION;
+  if (!profile || current) { existing?.remove(); return; }
+  if (existing) return;
+  const isCompany = type === "company";
+  const modal = document.createElement("div");
+  modal.id = "legalReacceptanceModal";
+  modal.className = "legal-modal";
+  modal.innerHTML = `<div class="legal-modal-backdrop"></div><div class="card legal-modal-card"><span class="section-tag">Atualização necessária</span><h2>Termos e Privacidade</h2><p>Para continuar usando a plataforma, revise os documentos atuais e registre sua ciência.</p><form class="form-grid" id="legalReacceptanceForm"><label class="check-row full legal-consent"><input type="checkbox" name="acceptTerms" required> Li e aceito os <a href="termos.html" target="_blank" rel="noopener">Termos de Uso</a>.</label><label class="check-row full legal-consent"><input type="checkbox" name="acknowledgePrivacy" required> Li o <a href="privacidade.html" target="_blank" rel="noopener">Aviso de Privacidade</a>.</label>${isCompany ? '<label class="check-row full legal-consent"><input type="checkbox" name="recruitmentDataCommitment" required> Comprometo-me a usar os dados dos candidatos somente para recrutamento e seleção.</label>' : `<label class="check-row full legal-consent"><input type="checkbox" name="employerVisibilityConsent" ${profile.employerVisibilityConsent ? "checked" : ""}> Autorizo a exibição do meu perfil profissional validado para empresas contratantes.</label>`}<div class="full form-actions"><button class="btn btn-primary" type="submit">Confirmar e continuar</button></div></form></div>`;
+  document.body.appendChild(modal);
+  modal.querySelector("form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const acceptedAt = new Date().toISOString();
+    try {
+      setButtonBusy(button, "Salvando...", "Confirmar e continuar", true);
+      const evidence = { termsAccepted: true, termsVersion: TERMS_VERSION, termsAcceptedAt: acceptedAt, privacyAcknowledged: true, privacyVersion: PRIVACY_VERSION, privacyAcknowledgedAt: acceptedAt, legalAcceptanceSource: `${type}_reauthorization` };
+      if (isCompany) await persistCompanyProfile({ ...evidence, recruitmentDataCommitment: true, recruitmentDataCommitmentAt: acceptedAt });
+      else await persistCandidateProfile({ ...evidence, employerVisibilityConsent: data.employerVisibilityConsent === "on", employerVisibilityConsentAt: data.employerVisibilityConsent === "on" ? acceptedAt : "" });
+      modal.remove();
+      createNotice("Aceites registrados com sucesso.", document.getElementById("globalNoticeHost") || document.body);
+    } catch (error) { console.error(error); createNotice("Não foi possível registrar os aceites agora.", modal.querySelector(".legal-modal-card"), "error"); }
+    finally { setButtonBusy(button, "Salvando...", "Confirmar e continuar", false); }
+  });
 }
 async function createCompanyAccount(data) {
   const normalizedEmail = normalizeEmail(data.email);
@@ -1490,6 +1536,7 @@ async function setupCloudMode() {
     const app = getApps().length ? getApps()[0] : initializeApp(config);
     state.firestore = getFirestore(app);
     state.auth = getAuth(app);
+    state.storage = getStorage(app);
     state.mode = "cloud";
     await cleanupLegacyCloudSensitiveData();
     bindRealtimeCollections();
@@ -1517,17 +1564,9 @@ function bindCollection(name, renderer, fallback) {
 
 function bindRealtimeCollections() {
   if (!state.firestore) return;
-  bindCollection("candidates", renderCandidateViews, fallbackCandidateRender);
   bindCollection("jobs", (items) => renderJobs(items.length ? items : defaultJobs), fallbackJobRender);
-  bindCollection("feedbacks", renderFeedbacks, fallbackFeedbackRender);
-  bindCollection("systemUsers", renderSystemUsers, fallbackSystemUsersRender);
-  bindCollection("serviceRequests", renderServiceRequests, fallbackServiceRequestRender);
-  bindCollection("interviews", renderInterviews, fallbackInterviewRender);
-  bindCollection("internalNotes", renderInternalNotes, fallbackInternalNotesRender);
-  bindCollection("companies", (items) => { state.companies = items; renderAdminRegistrations(); }, () => { state.companies = localStore.get(KEYS.companies, []); renderAdminRegistrations(); });
   bindCollection("catalogItems", renderCatalogItems, fallbackCatalogItemsRender);
   bindCollection("billingSettings", renderBillingSettings, fallbackBillingSettingsRender);
-  bindCollection("paymentSessions", renderPaymentSessions, fallbackPaymentSessionsRender);
 }
 
 function fallbackCatalogItemsRender() {
@@ -2263,7 +2302,7 @@ async function startProfessionalCheckout(plan, options = {}) {
         tokenLength: idToken?.length || 0,
         headers: {
           "Content-Type": secureHeaders["Content-Type"],
-          Authorization: idToken ? `Bearer ${maskTokenForLog(idToken)} (len=${idToken.length})` : ""
+          Authorization: idToken ? `[REDACTED] (len=${idToken.length})` : ""
         },
         payload: { catalogItemId: sessionPayload.catalogItemId, planCode: sessionPayload.planCode }
       });
@@ -2418,6 +2457,38 @@ function initTabs() {
 
 async function fetchCollection(name, fallback = []) {
   if (state.mode === "cloud" && state.firestore) {
+    const uid = state.auth?.currentUser?.uid || "";
+    const staff = Boolean(state.currentSystemUser);
+    if (["candidates", "companies", "feedbacks", "systemUsers", "serviceRequests", "interviews", "internalNotes", "paymentSessions", "paymentHistory", "privacyRequests"].includes(name) && !uid) return [];
+    if (name === "candidates" && isCandidatePage()) {
+      const snapshot = await getDoc(doc(state.firestore, COLLECTIONS.candidates, uid));
+      return snapshot.exists() ? [{ id: snapshot.id, ...snapshot.data() }] : [];
+    }
+    if (name === "candidates" && isCompanyPage()) {
+      if (!companyHasCurriculumAccess()) return [];
+      const snapshot = await getDocs(query(collection(state.firestore, COLLECTIONS.candidatePublicProfiles), where("visible", "==", true), where("validated", "==", true)));
+      return normalizeDocs(snapshot);
+    }
+    if (name === "companies" && isCompanyPage()) {
+      const snapshot = await getDoc(doc(state.firestore, COLLECTIONS.companies, uid));
+      return snapshot.exists() ? [{ id: snapshot.id, ...snapshot.data() }] : [];
+    }
+    if (name === "companies" && !staff) return [];
+    if (name === "systemUsers" && !staff) return [];
+    if (name === "internalNotes" && !staff) return [];
+    const ownershipField = {
+      feedbacks: isCandidatePage() ? "candidateUid" : "",
+      serviceRequests: isCandidatePage() ? "candidateUid" : isCompanyPage() ? "companyUid" : "",
+      interviews: isCandidatePage() ? "candidateUid" : isCompanyPage() ? "companyUid" : "",
+      paymentSessions: isCompanyPage() ? "companyUid" : "",
+      paymentHistory: isCompanyPage() ? "companyUid" : "",
+      privacyRequests: !staff ? "requesterUid" : ""
+    }[name] || "";
+    if (ownershipField && !staff) {
+      const snapshot = await getDocs(query(collection(state.firestore, COLLECTIONS[name]), where(ownershipField, "==", uid)));
+      return normalizeDocs(snapshot);
+    }
+    if (["feedbacks", "serviceRequests", "interviews", "paymentSessions", "paymentHistory", "privacyRequests"].includes(name) && !staff) return [];
     const snapshot = await getDocs(query(collection(state.firestore, COLLECTIONS[name]), orderBy("createdAt", "desc")));
     return normalizeDocs(snapshot);
   }
@@ -2639,6 +2710,8 @@ function getCandidateResumeFileHtml(item) {
   const fileName = item?.curriculoArquivoNome || item?.curriculoArquivo || "";
   const dataUrl = item?.curriculoArquivoDataUrl || "";
   const externalUrl = item?.curriculoArquivoUrl || "";
+  const storagePath = item?.curriculoArquivoStoragePath || "";
+  if (storagePath) return `<button class="btn btn-secondary btn-small" type="button" data-secure-resume-path="${escapeHtml(storagePath)}" data-secure-resume-name="${escapeHtml(fileName || "curriculo-candidato")}">Abrir currículo enviado</button><small>${escapeHtml(fileName || "Arquivo anexado")}</small>`;
   if (dataUrl) return `<a class="btn btn-secondary btn-small" href="${escapeHtml(dataUrl)}" target="_blank" rel="noopener" download="${escapeHtml(fileName || 'curriculo-candidato')}">Abrir currículo enviado</a><small>${escapeHtml(fileName || 'Arquivo anexado')}</small>`;
   if (externalUrl) return `<a class="btn btn-secondary btn-small" href="${escapeHtml(externalUrl)}" target="_blank" rel="noopener">Abrir currículo enviado</a><small>${escapeHtml(fileName || externalUrl)}</small>`;
   if (fileName) return `<span class="small-badge">${escapeHtml(fileName)}</span><small>Nome informado sem arquivo anexado.</small>`;
@@ -3190,6 +3263,61 @@ function initServiceCommunication() {
   });
 }
 
+function initPrivacyRequestForms() {
+  document.querySelectorAll("[data-privacy-request-form]").forEach((form) => form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const uid = state.auth?.currentUser?.uid || "";
+    if (!uid) return createNotice("Faça login para registrar a solicitação.", form.parentElement, "error");
+    const data = Object.fromEntries(new FormData(form).entries());
+    if (/\b(senha|password|cart[aã]o|cvv|token)\b/i.test(`${data.details || ""}`)) return createNotice("Não informe senha, cartão, CVV ou token nesta solicitação.", form.parentElement, "error");
+    const button = form.querySelector('button[type="submit"]');
+    try {
+      setButtonBusy(button, "Registrando...", button?.textContent || "Registrar solicitação", true);
+      await saveRecord("privacyRequests", { requesterUid: uid, requesterType: form.dataset.requesterType || "user", requesterEmail: state.auth?.currentUser?.email || "", requestType: data.requestType, details: `${data.details || ""}`.trim(), status: "Recebida", privacyVersion: PRIVACY_VERSION });
+      form.reset();
+      createNotice("Solicitação registrada com sucesso. A equipe fará a análise e confirmará sua identidade quando necessário.", form.parentElement);
+    } catch (error) { console.error(error); createNotice("Não foi possível registrar a solicitação agora.", form.parentElement, "error"); }
+    finally { setButtonBusy(button, "Registrando...", button?.dataset?.idleLabel || "Registrar solicitação", false); }
+  }));
+}
+
+function initSecureResumeDownloads() {
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-secure-resume-path]");
+    if (!button || !state.storage) return;
+    try {
+      setButtonBusy(button, "Abrindo...", button.textContent, true);
+      const blob = await getBlob(storageRef(state.storage, button.dataset.secureResumePath));
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = button.dataset.secureResumeName || "curriculo";
+      link.rel = "noopener";
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+      createNotice("Currículo aberto com segurança.", button.parentElement);
+    } catch (error) { console.error(error); createNotice("Você não possui permissão para abrir este currículo.", button.parentElement, "error"); }
+    finally { setButtonBusy(button, "Abrindo...", button.dataset.idleLabel || "Abrir currículo enviado", false); }
+  });
+}
+
+function renderPrivacyRequests(items) {
+  state.privacyRequests = Array.isArray(items) ? items : [];
+  const host = document.getElementById("adminPrivacyRequestsList");
+  if (!host) return;
+  host.innerHTML = state.privacyRequests.length ? state.privacyRequests.map((item) => `<article class="stack-item"><strong>${escapeHtml(item.requestType || "Solicitação")}</strong><span class="request-id-badge">${escapeHtml(item.id || "")}</span><p>${escapeHtml(item.requesterType || "Usuário")} • ${escapeHtml(item.requesterEmail || "Sem e-mail")}</p><p>${escapeHtml(item.details || "")}</p><span class="service-status"><strong>Status:</strong> ${escapeHtml(item.status || "Recebida")}</span><div class="form-actions top-gap"><button type="button" class="btn btn-secondary btn-small" data-privacy-status="Em análise" data-request-id="${escapeHtml(item.id || "")}">Marcar em análise</button><button type="button" class="btn btn-primary btn-small" data-privacy-status="Concluída" data-request-id="${escapeHtml(item.id || "")}">Concluir</button></div></article>`).join("") : '<article class="mini-card"><strong>Nenhuma solicitação LGPD</strong><p>Novos pedidos aparecerão aqui.</p></article>';
+}
+
+function initAdminPrivacyRequests() {
+  document.getElementById("adminPrivacyRequestsList")?.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-privacy-status]");
+    if (!button) return;
+    try { setButtonBusy(button, "Salvando...", button.textContent, true); await updateRecord("privacyRequests", button.dataset.requestId, { status: button.dataset.privacyStatus, handledBy: state.currentSystemUser?.nome || state.currentSystemUser?.login || "Admin" }); await hydrateInitialData(); createNotice("Solicitação atualizada com sucesso.", document.getElementById("adminPrivacyRequestsList")?.parentElement); }
+    catch (error) { console.error(error); createNotice("Não foi possível atualizar a solicitação.", document.getElementById("adminPrivacyRequestsList")?.parentElement, "error"); }
+    finally { setButtonBusy(button, "Salvando...", button.dataset.idleLabel || button.textContent, false); }
+  });
+}
+
 function renderInterviews(data) {
   state.interviews = Array.isArray(data) ? data : [];
   const scopedInterviews = getCandidateScopedInterviews(state.interviews);
@@ -3563,7 +3691,9 @@ async function saveJob(data) {
 }
 
 async function saveFeedback(data) {
-  await saveRecord("feedbacks", data);
+  const email = `${data.candidateEmail || data.email || ""}`.trim().toLowerCase();
+  const candidate = state.candidates.find((item) => `${item.email || ""}`.trim().toLowerCase() === email || `${item.uid || item.id || ""}` === `${data.candidateUid || data.uid || ""}`);
+  await saveRecord("feedbacks", { ...data, candidateUid: data.candidateUid || data.uid || candidate?.uid || candidate?.id || "" });
   if (state.mode === "local") renderFeedbacks(state.feedbacks);
 }
 
@@ -4150,6 +4280,8 @@ function initCandidatePage() {
     });
     const linkedinConsent = form.elements.namedItem("linkedinContactConsent");
     if (linkedinConsent) linkedinConsent.checked = data.linkedinContactConsent === true || data.linkedinContactConsent === "on";
+    const employerConsent = form.elements.namedItem("employerVisibilityConsent");
+    if (employerConsent) employerConsent.checked = data.employerVisibilityConsent === true || data.employerVisibilityConsent === "on";
     const curriculoNome = document.getElementById("curriculoNome");
     if (curriculoNome) curriculoNome.textContent = data.curriculoArquivoNome || data.curriculoArquivo || "Nenhum currículo informado.";
     const serviceEmailField = document.querySelector('#candidateServiceForm input[name="email"]');
@@ -4169,7 +4301,8 @@ function initCandidatePage() {
       state.currentCandidateUser = state.mode === "cloud" && state.auth?.currentUser
         ? state.auth.currentUser
         : state.currentCandidateUser;
-      await persistCandidateProfile({ nome: data.nome, email: data.email, telefone: data.telefone || "", regiao: data.regiao || "", area: data.area || "", nivel: data.nivel || "", status: "Ativo" });
+      const acceptedAt = new Date().toISOString();
+      await persistCandidateProfile({ nome: data.nome, email: data.email, telefone: data.telefone || "", regiao: data.regiao || "", area: data.area || "", nivel: data.nivel || "", status: "Ativo", termsAccepted: true, termsVersion: TERMS_VERSION, termsAcceptedAt: acceptedAt, privacyAcknowledged: true, privacyVersion: PRIVACY_VERSION, privacyAcknowledgedAt: acceptedAt, employerVisibilityConsent: data.employerVisibilityConsent === "on", employerVisibilityConsentAt: data.employerVisibilityConsent === "on" ? acceptedAt : "", legalAcceptanceSource: "candidate_register" });
       await loadCandidateProfileForCurrentUser();
       await hydrateInitialData();
       fillCandidateForm({ nome: data.nome, email: data.email });
@@ -4202,6 +4335,7 @@ function initCandidatePage() {
         ? state.auth.currentUser
         : state.currentCandidateUser;
       await loadCandidateProfileForCurrentUser();
+      await hydrateInitialData();
       fillCandidateForm(state.currentCandidateProfile || { email: data.email });
       syncCandidateUiState();
       showCandidateAuthNotice("Login realizado com sucesso. Redirecionando para sua área.");
@@ -4263,8 +4397,14 @@ async function readCandidateResumeFile(form) {
   const fileInput = form?.querySelector('input[name="curriculoArquivoFile"]');
   const file = fileInput?.files?.[0];
   if (!file) return {};
-  const maxBytes = 700 * 1024;
+  const maxBytes = 5 * 1024 * 1024;
   if (file.size > maxBytes) throw new Error('CURRICULO_FILE_TOO_LARGE');
+  if (state.mode === "cloud" && state.storage && getCurrentCandidateUid()) {
+    const safeName = file.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9._-]/g, "-");
+    const path = `candidate-resumes/${getCurrentCandidateUid()}/${Date.now()}-${safeName}`;
+    await uploadBytes(storageRef(state.storage, path), file, { contentType: file.type || "application/octet-stream", customMetadata: { ownerUid: getCurrentCandidateUid() } });
+    return { curriculoArquivoNome: file.name, curriculoArquivoTipo: file.type || "application/octet-stream", curriculoArquivoTamanho: file.size, curriculoArquivoStoragePath: path, curriculoArquivoDataUrl: deleteField(), curriculoArquivo: file.name };
+  }
   const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
@@ -4281,6 +4421,7 @@ async function readCandidateResumeFile(form) {
     }
     const data = Object.fromEntries(new FormData(form).entries());
     data.linkedinContactConsent = data.linkedinContactConsent === "on";
+    data.employerVisibilityConsent = data.employerVisibilityConsent === "on";
     delete data.curriculoArquivoFile;
     const filePayload = await readCandidateResumeFile(form);
     Object.assign(data, filePayload);
@@ -4307,7 +4448,7 @@ async function readCandidateResumeFile(form) {
       buttonCooldownTimer = setTimeout(() => setSubmitButtonState(false, "Salvar perfil"), 4000);
     } catch (error) {
       console.error("Erro ao salvar candidato:", error);
-      showCandidateMessage(error?.message === "CURRICULO_FILE_TOO_LARGE" ? "O currículo anexado está muito grande. Use um arquivo de até 700 KB ou compacte o documento antes de enviar." : "Não foi possível salvar agora. Tente novamente.", "error");
+      showCandidateMessage(error?.message === "CURRICULO_FILE_TOO_LARGE" ? "O currículo anexado está muito grande. Use um arquivo de até 5 MB ou compacte o documento antes de enviar." : "Não foi possível salvar agora. Tente novamente.", "error");
       setSubmitButtonState(false, "Salvar perfil");
     } finally {
       isSubmitting = false;
@@ -4395,6 +4536,9 @@ async function readCandidateResumeFile(form) {
       setButtonBusy(button, "Salvando...", button?.textContent || "Salvar teste DISC profissional", true);
       await saveCandidateDiscResult({
         ...data,
+        discConsent: true,
+        discConsentVersion: PRIVACY_VERSION,
+        discConsentAt: new Date().toISOString(),
         candidato: state.currentCandidateProfile?.nome || state.currentCandidateUser?.displayName || "Candidato",
         candidateEmail: state.currentCandidateUser?.email || data.candidateEmail || state.currentCandidateProfile?.email || "",
         email: state.currentCandidateUser?.email || data.candidateEmail || state.currentCandidateProfile?.email || "",
@@ -4493,7 +4637,8 @@ function initJobPage() {
       state.currentCompanyUser = state.mode === "cloud" && state.auth?.currentUser
         ? state.auth.currentUser
         : state.currentCompanyUser;
-      await persistCompanyProfile({ empresa: data.empresa, email: data.email, login: data.login, telefone: data.telefone, cnpj: data.cnpj, planName: "", planActive: false, paymentStatus: "Pendente", status: "Pendente" });
+      const acceptedAt = new Date().toISOString();
+      await persistCompanyProfile({ empresa: data.empresa, email: data.email, login: data.login, telefone: data.telefone, cnpj: data.cnpj, planName: "", planActive: false, paymentStatus: "Pendente", status: "Pendente", termsAccepted: true, termsVersion: TERMS_VERSION, termsAcceptedAt: acceptedAt, privacyAcknowledged: true, privacyVersion: PRIVACY_VERSION, privacyAcknowledgedAt: acceptedAt, recruitmentDataCommitment: true, recruitmentDataCommitmentAt: acceptedAt, legalAcceptanceSource: "company_register" });
       await loadCompanyProfileForCurrentUser();
       await hydrateInitialData();
       syncCompanyUiState();
@@ -4517,6 +4662,7 @@ function initJobPage() {
         ? state.auth.currentUser
         : state.currentCompanyUser;
       await loadCompanyProfileForCurrentUser();
+      await hydrateInitialData();
       syncCompanyUiState();
       showCompanyAuthNotice("Login realizado com sucesso. Redirecionando para a área da empresa.");
       clearFormFields(loginForm);
@@ -4664,6 +4810,16 @@ async function updateCandidateDecision(candidateId, decision) {
     decisionAt: state.mode === "cloud" ? serverTimestamp() : new Date().toLocaleString("pt-BR")
   };
   await updateRecord("candidates", candidateId, payload);
+  if (state.mode === "cloud" && state.firestore) {
+    const publicRef = doc(state.firestore, COLLECTIONS.candidatePublicProfiles, candidateId);
+    if (decision === "Validado pela consultora" && current.employerVisibilityConsent === true) {
+      const allowedFields = ["nome", "regiao", "area", "nivel", "cargoDesejado", "pretensaoSalarial", "disponibilidade", "modeloTrabalho", "cnh", "linkedinPortfolio", "resumo", "experiencias", "formacao", "cursosCertificacoes", "competencias", "idiomas", "valores", "curriculoArquivoNome"];
+      const publicProfile = Object.fromEntries(allowedFields.map((key) => [key, current[key] || ""]));
+      await setDoc(publicRef, { ...publicProfile, uid: current.uid || candidateId, candidateUid: current.uid || candidateId, validated: true, visible: true, publishedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    } else {
+      try { await deleteDoc(publicRef); } catch (error) { if (!isPermissionError(error)) throw error; }
+    }
+  }
   if (current.email) {
     await saveFeedback({
       candidato: current.nome || "Candidato",
@@ -5174,7 +5330,7 @@ function initInternalNotesAdminActions() {
 
 async function hydrateInitialData() {
   try {
-    const [candidates, jobs, feedbacks, systemUsers, serviceRequests, interviews, internalNotes, companies, catalogItems, billingSettings, paymentSessions] = await Promise.all([
+    const [candidates, jobs, feedbacks, systemUsers, serviceRequests, interviews, internalNotes, companies, catalogItems, billingSettings, paymentSessions, privacyRequests] = await Promise.all([
       fetchCollection("candidates", []),
       fetchCollection("jobs", defaultJobs),
       fetchCollection("feedbacks", []),
@@ -5186,6 +5342,7 @@ async function hydrateInitialData() {
       fetchCollection("catalogItems", defaultCatalogItems),
       fetchCollection("billingSettings", defaultBillingSettings),
       fetchCollection("paymentSessions", [])
+      , fetchCollection("privacyRequests", [])
     ]);
     renderCandidateViews(candidates);
     renderJobs(jobs.length ? jobs : defaultJobs);
@@ -5199,6 +5356,7 @@ async function hydrateInitialData() {
     renderCatalogItems(catalogItems);
     renderBillingSettings(billingSettings);
     renderPaymentSessions(paymentSessions);
+    renderPrivacyRequests(privacyRequests);
   } catch (error) {
     if (isPermissionError(error)) console.warn("Alguns dados são restritos ao usuário logado; usando dados disponíveis na página.");
     else console.error("Erro ao carregar dados iniciais:", error);
@@ -5229,10 +5387,12 @@ async function init() {
       if (isCandidatePage()) {
         state.currentCandidateUser = user || null;
         await loadCandidateProfileForCurrentUser();
+        if (user) await hydrateInitialData();
       }
       if (isCompanyPage()) {
         state.currentCompanyUser = user || null;
         await loadCompanyProfileForCurrentUser();
+        if (user) await hydrateInitialData();
       }
     });
   }
@@ -5274,6 +5434,9 @@ async function init() {
   initAdminHomeFeaturedSettingsManagement();
   initAdminServiceDeliveryManagement();
   initServiceCommunication();
+  initPrivacyRequestForms();
+  initSecureResumeDownloads();
+  initAdminPrivacyRequests();
   initInternalNotesAdminActions();
 }
 

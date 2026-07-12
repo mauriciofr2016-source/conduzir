@@ -17,6 +17,25 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function companyCanAccessCandidates() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/companies/$(request.auth.uid))
+        && (get(/databases/$(database)/documents/companies/$(request.auth.uid)).data.planActive == true
+          || get(/databases/$(database)/documents/companies/$(request.auth.uid)).data.paymentStatus == "Ativo")
+        && ((get(/databases/$(database)/documents/companies/$(request.auth.uid)).data.permissions is map
+            && get(/databases/$(database)/documents/companies/$(request.auth.uid)).data.permissions.curriculumAccess == true)
+          || (get(/databases/$(database)/documents/companies/$(request.auth.uid)).data.recurringPermissions is map
+            && get(/databases/$(database)/documents/companies/$(request.auth.uid)).data.recurringPermissions.curriculumAccess == true));
+    }
+
+    function ownsCandidateData(data) {
+      return signedIn() && (data.uid == request.auth.uid || data.candidateUid == request.auth.uid);
+    }
+
+    function ownsCompanyData(data) {
+      return signedIn() && data.companyUid == request.auth.uid;
+    }
+
     function isStaff() {
       return isAdmin() || (signedIn()
         && exists(/databases/$(database)/documents/system_users/$(request.auth.uid))
@@ -89,9 +108,12 @@ service cloud.firestore {
     }
 
     match /companies/{uid} {
-      allow read: if ownsCompany(uid) || signedIn();
+      allow read: if ownsCompany(uid) || isStaff();
       allow create: if ownsCompany(uid)
         && request.resource.data.uid == request.auth.uid
+        && request.resource.data.termsAccepted == true
+        && request.resource.data.privacyAcknowledged == true
+        && request.resource.data.recruitmentDataCommitment == true
         && request.resource.data.planActive == false
         && request.resource.data.paymentStatus == "Pendente"
         && request.resource.data.planName == ""
@@ -102,7 +124,12 @@ service cloud.firestore {
           "asaasSubscriptionId",
           "asaasPaymentId"
         ]);
-      allow update, delete: if isAdmin() || (ownsCompany(uid) && financialFieldsUnchanged());
+      allow update: if isStaff() || (ownsCompany(uid)
+        && financialFieldsUnchanged()
+        && request.resource.data.termsAccepted == true
+        && request.resource.data.privacyAcknowledged == true
+        && request.resource.data.recruitmentDataCommitment == true);
+      allow delete: if isAdmin();
     }
 
     match /catalog_items/{id} {
@@ -116,12 +143,12 @@ service cloud.firestore {
     }
 
     match /payment_sessions/{id} {
-      allow read: if signedIn();
+      allow read: if isStaff() || ownsCompanyData(resource.data);
       allow write: if isAdmin();
     }
 
     match /payment_history/{id} {
-      allow read: if signedIn();
+      allow read: if isStaff() || ownsCompanyData(resource.data);
       allow write: if isAdmin();
     }
 
@@ -130,32 +157,51 @@ service cloud.firestore {
     }
 
     match /candidates/{id} {
-      allow read: if signedIn();
-      allow create: if signedIn()
+      allow read: if isStaff()
+        || (signedIn() && request.auth.uid == id);
+      allow create: if isStaff() || (signedIn()
+          && request.auth.uid == id
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.termsAccepted == true
+          && request.resource.data.privacyAcknowledged == true
+        && request.resource.data.termsAccepted == true
+        && request.resource.data.privacyAcknowledged == true
         && (!request.resource.data.keys().hasAny(discFields())
-          || (request.auth.uid == id && request.resource.data.discCompleted == true && request.resource.data.discResult.candidateUid == request.auth.uid));
-      allow update: if isAdmin()
-        || (signedIn() && discFieldsUnchanged())
-        || mayWriteCandidateDiscOnce(id);
+          || (request.resource.data.discCompleted == true && request.resource.data.discResult.candidateUid == request.auth.uid)));
+      allow update: if isStaff()
+        || (signedIn() && request.auth.uid == id
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasNone([
+            "validated", "seloConduzir", "decisionBy", "decisionAt",
+            "lastServiceDeliveredAt", "lastServiceDeliveredBy", "lastServiceDeliveryMessage"
+          ])
+          && (discFieldsUnchanged() || mayWriteCandidateDiscOnce(id)));
       allow delete: if isAdmin();
+    }
+
+    match /candidate_public_profiles/{id} {
+      allow read: if isStaff()
+        || (signedIn() && request.auth.uid == id)
+        || (companyCanAccessCandidates() && resource.data.visible == true && resource.data.validated == true);
+      allow create, update: if isStaff();
+      allow delete: if isStaff() || (signedIn() && request.auth.uid == id);
     }
 
     match /jobs/{id} {
       allow read: if true;
-      allow write: if signedIn();
+      allow create: if isStaff() || ownsCompanyData(request.resource.data);
+      allow update: if isStaff() || (ownsCompanyData(resource.data) && request.resource.data.companyUid == resource.data.companyUid);
+      allow delete: if isStaff() || ownsCompanyData(resource.data);
     }
 
     match /feedbacks/{id} {
-      allow read: if signedIn();
-      allow create: if isAdmin()
-        || validOwnDiscFeedback(id)
-        || (signedIn() && !id.matches("^disc_.*$"));
-      allow update, delete: if isAdmin()
-        || (signedIn() && !id.matches("^disc_.*$"));
+      allow read: if isStaff() || ownsCandidateData(resource.data);
+      allow create: if isStaff() || validOwnDiscFeedback(id);
+      allow update, delete: if isStaff();
     }
 
     match /system_users/{id} {
-      allow read: if signedIn();
+      allow read: if isStaff();
       allow write: if isAdmin();
     }
 
@@ -168,12 +214,27 @@ service cloud.firestore {
     }
 
     match /interviews/{id} {
-      allow read, write: if signedIn();
+      allow read: if isStaff() || ownsCandidateData(resource.data) || ownsCompanyData(resource.data);
+      allow create, update, delete: if isStaff();
     }
 
     match /internal_notes/{id} {
-      allow read: if signedIn();
-      allow write: if isAdmin();
+      allow read, write: if isStaff();
+    }
+
+    match /privacy_requests/{id} {
+      allow create: if signedIn()
+        && request.resource.data.requesterUid == request.auth.uid
+        && request.resource.data.requesterEmail == request.auth.token.email
+        && request.resource.data.requesterType in ["candidate", "company"]
+        && request.resource.data.status == "Recebida"
+        && request.resource.data.details is string
+        && request.resource.data.details.size() > 0
+        && request.resource.data.details.size() <= 3000
+        && request.resource.data.requestType in ["access", "correction", "deletion", "revoke_consent", "automated_review", "information", "incident"];
+      allow read: if isStaff() || (signedIn() && resource.data.requesterUid == request.auth.uid);
+      allow update: if isStaff();
+      allow delete: if isAdmin();
     }
   }
 }

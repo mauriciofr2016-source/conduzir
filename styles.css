@@ -656,6 +656,16 @@ button:disabled { opacity: .72; cursor: not-allowed; }
 .candidate-select-row span { display:flex; flex-direction:column; gap:3px; }
 .candidate-select-row small { color:#66736b; }
 .check-row { display:flex; gap:10px; align-items:center; font-weight:700; }
+.legal-consent { align-items:flex-start; font-weight:500; line-height:1.5; padding:10px 12px; border:1px solid #dce8df; border-radius:12px; background:#f8fbf9; }
+.legal-consent input { margin-top:5px; flex:0 0 auto; }
+.legal-consent a, .legal-links a { color:var(--primary, #245c35); font-weight:700; }
+.legal-document { max-width:900px; margin:0 auto; }
+.legal-document h2 { margin-top:28px; }
+.legal-document li { margin:8px 0; }
+.legal-review-warning { border-color:#d7a928; background:#fff9e6; }
+.legal-modal { position:fixed; inset:0; z-index:150; display:flex; align-items:center; justify-content:center; padding:20px; }
+.legal-modal-backdrop { position:absolute; inset:0; background:rgba(5,20,14,.72); backdrop-filter:blur(3px); }
+.legal-modal-card { position:relative; z-index:1; width:min(680px,100%); max-height:90vh; overflow:auto; }
 
 /* Central operacional de serviços */
 .service-workspace { display:grid; gap:16px; padding:18px; border:1px solid #d7e6dc; border-radius:18px; background:#f8fbf9; }

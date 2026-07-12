@@ -37,7 +37,9 @@ const CHECKOUT_LOCK_MINUTES = 3;
 const ALLOWED_ORIGINS = new Set([
   "https://mauriciofr2016-source.github.io",
   "https://bancotalentoserika.web.app",
-  "https://bancotalentoserika.firebaseapp.com"
+  "https://bancotalentoserika.firebaseapp.com",
+  "https://conduzirtalentos.com.br",
+  "https://www.conduzirtalentos.com.br"
 ]);
 
 function setCors(req, res) {
@@ -67,7 +69,7 @@ function sanitizedHeaders(req) {
     if (key.toLowerCase() === "authorization") {
       const value = `${headers[key] || ""}`;
       const token = value.replace(/^Bearer\s+/i, "");
-      headers[key] = value ? `Bearer ${maskToken(token)} (len=${token.length})` : "";
+      headers[key] = value ? `[REDACTED] (len=${token.length})` : "";
     }
   }
   return headers;
@@ -118,7 +120,7 @@ async function authenticateCompany(req) {
     hasBearer,
     tokenLength: token.length,
     authorizationHeaderSource: req.headers?.authorization ? "req.headers.authorization" : (req.headers?.Authorization ? "req.headers.Authorization" : "req.get"),
-    authorizationPreview: token ? maskToken(token) : ""
+    authorizationPreview: token ? "[REDACTED]" : ""
   });
   if (!authorization) {
     authDebug(req, "returning_401", { reason: "401_TOKEN_MISSING" });

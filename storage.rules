@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && (request.auth.token.admin == true || request.auth.token.email == "admin@conduzirtalentos.com"); }
+    function isStaff() {
+      return isAdmin() || (signedIn()
+        && firestore.exists(/databases/(default)/documents/system_users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/system_users/$(request.auth.uid)).data.deleted != true
+        && firestore.get(/databases/(default)/documents/system_users/$(request.auth.uid)).data.status != "Bloqueado");
+    }
+
+    match /candidate-resumes/{uid}/{fileName} {
+      allow read: if signedIn() && (request.auth.uid == uid || isStaff());
+      allow create, update: if signedIn()
+        && (request.auth.uid == uid || isStaff())
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('application/pdf|application/msword|application/vnd.openxmlformats-officedocument.wordprocessingml.document|image/png|image/jpeg');
+      allow delete: if signedIn() && (request.auth.uid == uid || isStaff());
+    }
+  }
+}
