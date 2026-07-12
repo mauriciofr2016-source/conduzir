@@ -1590,21 +1590,24 @@ function fillAdminSupportMeetForms(settings) {
 function renderCandidateHighlightPlans() {
   const host = document.getElementById("candidateHighlightPlanCards");
   if (!host) return;
-  const plans = getCatalogItemsByAudience("plan", "candidate");
+  const plans = [
+    ...getCatalogItemsByAudience("plan", "candidate"),
+    ...getCatalogItemsByAudience("service", "candidate")
+  ].filter((item, index, items) => items.findIndex((other) => getCatalogItemId(other) === getCatalogItemId(item)) === index);
   host.innerHTML = plans.length ? plans.map((item) => `
     <article class="catalog-card ${item.featured ? "is-featured" : ""}">
       <div class="catalog-card-head">
         <div>
-          <span class="record-type-badge">${item.featured ? "Mais indicado" : "Plano candidato"}</span>
+          <span class="record-type-badge">${item.featured ? "Mais indicado" : item.type === "service" ? "Serviço avulso" : "Plano candidato"}</span>
           <h3>${escapeHtml(item.title || "Plano de destaque")}</h3>
         </div>
         <div class="catalog-price">${formatCurrencyBRL(item.price || 0)}<small>${escapeHtml(getBillingCycleLabel(item.billingCycle))}</small></div>
       </div>
       <p>${escapeHtml(item.shortDescription || item.description || "Plano para avaliação profissional do candidato.")}</p>
       ${item.description ? `<p class="muted-note top-gap">${escapeHtml(item.description)}</p>` : ""}
-      <button class="btn btn-primary top-gap" type="button" data-candidate-highlight-plan="${escapeHtml(item.code || item.title || "")}" data-plan-title="${escapeHtml(item.title || "")}" data-plan-price="${escapeHtml(item.price || 0)}">Escolher este plano</button>
+      <button class="btn btn-primary top-gap" type="button" data-candidate-highlight-plan="${escapeHtml(item.code || item.title || "")}" data-plan-title="${escapeHtml(item.title || "")}" data-plan-price="${escapeHtml(item.price || 0)}">${item.type === "service" ? "Contratar este serviço" : "Escolher este plano"}</button>
     </article>
-  `).join("") : '<article class="mini-card"><strong>Nenhum plano de candidato ativo</strong><p>O administrador ainda não publicou os planos do botão Quero me destacar.</p></article>';
+  `).join("") : '<article class="mini-card"><strong>Nenhum plano ou serviço ativo</strong><p>O administrador ainda não publicou opções para o candidato no botão Quero me destacar.</p></article>';
 }
 
 function renderCandidateServiceOptions() {
@@ -1673,7 +1676,7 @@ function renderAdminPlanServiceCatalog() {
 
   const audienceLabel = (item) => {
     const audience = getCatalogAudience(item);
-    if (audience === "candidate") return "Plano candidato";
+    if (audience === "candidate") return item.type === "service" ? "Serviço avulso candidato" : "Plano candidato";
     if (audience === "company_service") return "Serviço avulso empresa";
     if (audience === "candidate_service") return "Serviço no currículo";
     return "Plano empresa";
@@ -1686,8 +1689,8 @@ function renderAdminPlanServiceCatalog() {
     return [
       ["company", "Empresa"],
       ["company_service", "Serviço avulso para empresa"],
-      ["candidate", "Candidato"],
-      ["candidate_service", "Serviço no currículo do candidato"]
+      ["candidate", "Candidato / Quero me destacar"],
+      ["candidate_service", "Serviço no currículo do candidato para empresa"]
     ].map(([value, label]) => `<option value="${value}" ${audience === value ? "selected" : ""}>${label}</option>`).join("");
   };
   const makePermissionFields = (item) => PERMISSION_KEYS.map((key) => `
