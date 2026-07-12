@@ -143,12 +143,12 @@ service cloud.firestore {
     }
 
     match /payment_sessions/{id} {
-      allow read: if isStaff() || ownsCompanyData(resource.data);
+      allow read: if isStaff() || ownsCompanyData(resource.data) || ownsCandidateData(resource.data);
       allow write: if isAdmin();
     }
 
     match /payment_history/{id} {
-      allow read: if isStaff() || ownsCompanyData(resource.data);
+      allow read: if isStaff() || ownsCompanyData(resource.data) || ownsCandidateData(resource.data);
       allow write: if isAdmin();
     }
 
@@ -164,6 +164,9 @@ service cloud.firestore {
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.termsAccepted == true
           && request.resource.data.privacyAcknowledged == true
+          && !request.resource.data.keys().hasAny([
+            "asaasCustomerId", "asaasSubscriptionId", "asaasPaymentId", "paymentStatus", "lastPaymentAt"
+          ])
         && request.resource.data.termsAccepted == true
         && request.resource.data.privacyAcknowledged == true
         && (!request.resource.data.keys().hasAny(discFields())
@@ -171,6 +174,7 @@ service cloud.firestore {
       allow update: if isStaff()
         || (signedIn() && request.auth.uid == id
           && request.resource.data.uid == request.auth.uid
+          && financialFieldsUnchanged()
           && request.resource.data.diff(resource.data).affectedKeys().hasNone([
             "validated", "seloConduzir", "decisionBy", "decisionAt",
             "lastServiceDeliveredAt", "lastServiceDeliveredBy", "lastServiceDeliveryMessage"

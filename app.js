@@ -14,7 +14,8 @@ import {
   deleteDoc,
   setDoc,
   getDoc,
-  deleteField
+  deleteField,
+  runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 import {
@@ -367,6 +368,7 @@ const state = {
   catalogItems: [],
   billingSettings: [],
   paymentSessions: [],
+  serviceRequestUnsubscribe: null,
   privacyRequests: [],
   adminUserEditId: null,
   adminCatalogInlineEditId: null,
@@ -766,6 +768,17 @@ async function getAuthenticatedCompanyIdToken() {
   return token;
 }
 
+async function getAuthenticatedCandidateIdToken() {
+  if (state.mode !== "cloud" || !state.auth) throw new Error("AUTH_REQUIRED");
+  const authUser = await waitForAuthUser();
+  if (!authUser?.uid || typeof authUser.getIdToken !== "function") throw new Error("AUTH_REQUIRED");
+  if (state.currentCandidateProfile?.uid && state.currentCandidateProfile.uid !== authUser.uid) {
+    throw new Error("CANDIDATE_AUTH_MISMATCH");
+  }
+  state.currentCandidateUser = authUser;
+  return authUser.getIdToken(true);
+}
+
 function waitForAuthUser(timeoutMs = 8000) {
   if (state.auth?.currentUser) return Promise.resolve(state.auth.currentUser);
   if (!state.auth) return Promise.resolve(null);
@@ -1040,7 +1053,7 @@ function getCandidateScopedServiceRequests(items) {
   const currentUid = getCurrentCandidateUid();
   const currentEmail = getCurrentCandidateEmail();
   return (Array.isArray(items) ? items : []).filter((item) => {
-    if (item.origin !== "candidate") return false;
+    if (!["candidate", "candidate_highlight_plan"].includes(`${item.origin || ""}`)) return false;
     const itemUid = `${item.uid || ""}`.trim();
     const itemEmail = `${item.email || ""}`.trim().toLowerCase();
     return Boolean((currentUid && itemUid === currentUid) || (currentEmail && itemEmail === currentEmail));
@@ -1569,6 +1582,21 @@ function bindRealtimeCollections() {
   bindCollection("billingSettings", renderBillingSettings, fallbackBillingSettingsRender);
 }
 
+function bindAuthorizedServiceRequests() {
+  if (!state.firestore || !state.auth?.currentUser) return;
+  if (typeof state.serviceRequestUnsubscribe === "function") state.serviceRequestUnsubscribe();
+  const uid = state.auth.currentUser.uid;
+  let source = collection(state.firestore, COLLECTIONS.serviceRequests);
+  if (isCandidatePage()) source = query(source, where("candidateUid", "==", uid));
+  else if (isCompanyPage()) source = query(source, where("companyUid", "==", uid));
+  state.serviceRequestUnsubscribe = onSnapshot(source, (snapshot) => {
+    state.serviceRequests = normalizeDocs(snapshot).sort((a, b) => `${b.createdAt?.seconds || b.createdAt || ""}`.localeCompare(`${a.createdAt?.seconds || a.createdAt || ""}`));
+    renderServiceRequests(state.serviceRequests);
+  }, (error) => {
+    if (!isPermissionError(error)) console.error("Não foi possível atualizar as notificações de serviços em tempo real:", error);
+  });
+}
+
 function fallbackCatalogItemsRender() {
   state.catalogItems = state.mode === "local" ? localStore.get(KEYS.catalogItems, defaultCatalogItems) : [];
   renderCatalogItems(state.catalogItems);
@@ -1897,7 +1925,7 @@ function renderCompanyCatalogSections() {
   if (architectureNote) {
     architectureNote.textContent = billing.checkoutMode === "hosted_api" && billing.createCheckoutEndpoint
       ? `Pagamento Asaas configurado via endpoint seguro. O valor do catalogo e usado somente para novas assinaturas e fica travado no contrato criado.`
-      : `O clique registra a intencao comercial com ${getBillingProviderLabel(billing.provider)}. Alteracoes de preco afetam apenas novas assinaturas.`;
+      : `O clique registra a intenção comercial com ${getBillingProviderLabel(billing.provider)}. Alterações de preço afetam apenas novas assinaturas.`;
   }
   updateNr1FloatingWhatsappButton();
   renderPaymentSessions(state.paymentSessions || []);
@@ -1967,7 +1995,7 @@ function fillAdminCatalogForm(item) {
   const title = document.getElementById("adminCatalogFormTitle");
   if (title) title.textContent = `Editar: ${item.title || "item"}`;
   const submit = document.getElementById("adminCatalogSubmitBtn");
-  if (submit) submit.textContent = "Salvar alteracoes";
+  if (submit) submit.textContent = "Salvar alterações";
 }
 
 function showAdminCatalogNotice(message, type = "success") {
@@ -2345,6 +2373,29 @@ async function startProfessionalCheckout(plan, options = {}) {
   await createPaymentHistoryRecord({ ...sessionPayload, status: sessionPayload.status });
   if (itemKind === "subscription") await persistCompanyProfile(companyContract());
   return { redirected: false, sessionPayload };
+}
+
+async function startCandidateCheckout(item) {
+  const billing = getActiveBillingSettings();
+  const checkoutEndpoint = resolveCheckoutEndpoint(billing.createCheckoutEndpoint, billing);
+  if (billing.checkoutMode !== "hosted_api" || !checkoutEndpoint) {
+    throw new Error("O pagamento online ainda não está habilitado. Fale com o atendimento.");
+  }
+  const catalogItemId = getCatalogItemId(item);
+  if (!catalogItemId) throw new Error("Serviço não encontrado.");
+  const cpf = `${state.currentCandidateProfile?.cpf || state.currentCandidateProfile?.cpfCnpj || ""}`.replace(/\D/g, "");
+  if (cpf.length !== 11) throw new Error("Informe um CPF válido no seu perfil e salve antes de contratar.");
+  const idToken = await getAuthenticatedCandidateIdToken();
+  const response = await fetch(checkoutEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+    body: JSON.stringify({ catalogItemId, accountType: "candidate", cpf, candidateDocument: cpf })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.message || "Não foi possível iniciar o pagamento.");
+  if (!data?.url) throw new Error("O pagamento foi criado, mas o link do Asaas não foi retornado.");
+  window.location.href = data.url;
+  return { redirected: true };
 }
 function showAdminSupportSettingsNotice(message, type = "success") {
   const host = document.getElementById("adminSupportSettingsNoticeHost") || document.getElementById("adminCatalogNoticeHost");
@@ -3000,6 +3051,7 @@ function initAdminServiceDeliveryManagement() {
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
+    if (`${data.deliveryStatus || ""}` === "Concluído" && !window.confirm("Confirmar a conclusão e a entrega deste serviço? As informações serão aplicadas ao perfil do cliente.")) return;
     const button = form.querySelector('button[type="submit"]');
     try {
       setButtonBusy(button, "Salvando...", button?.textContent || "Salvar", true);
@@ -3010,8 +3062,9 @@ function initAdminServiceDeliveryManagement() {
       const validationMessage = validateServiceCompletion(request, data);
       if (validationMessage) throw Object.assign(new Error("SERVICE_VALIDATION"), { userMessage: validationMessage });
       const actor = actorName;
-      await updateRecord("serviceRequests", data.requestId, buildServiceProgressUpdate(request, data, actor));
-      await applyServiceDeliveryCompletion({ ...request, id: data.requestId }, data);
+      const savedRequest = await saveServiceProgressWithClaim(data.requestId, data, actor);
+      await applyServiceDeliveryCompletion({ ...savedRequest, id: data.requestId }, data);
+      if (`${data.deliveryStatus || ""}` === "Concluído") await updateRecord("serviceRequests", data.requestId, { completionApplied: true, completionAppliedAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString() });
       await hydrateInitialData();
       clearFormFields(form);
       createNotice("Dados salvos com sucesso.", form.parentElement);
@@ -3802,6 +3855,26 @@ function buildServiceProgressUpdate(request, data, actor) {
   };
 }
 
+async function saveServiceProgressWithClaim(requestId, data, actor) {
+  const current = state.serviceRequests.find((item) => `${item.id || ""}` === `${requestId || ""}`);
+  if (!current) throw new Error("SERVICE_REQUEST_NOT_FOUND");
+  if (state.mode !== "cloud" || !state.firestore) {
+    if (current.claimedBy && current.claimedBy !== actor) throw new Error("SERVICE_ALREADY_CLAIMED");
+    await updateRecord("serviceRequests", requestId, buildServiceProgressUpdate(current, data, actor));
+    return current;
+  }
+  const requestRef = doc(state.firestore, COLLECTIONS.serviceRequests, requestId);
+  let snapshotData = current;
+  await runTransaction(state.firestore, async (transaction) => {
+    const snapshot = await transaction.get(requestRef);
+    if (!snapshot.exists()) throw new Error("SERVICE_REQUEST_NOT_FOUND");
+    snapshotData = { id: snapshot.id, ...snapshot.data() };
+    if (snapshotData.claimedBy && snapshotData.claimedBy !== actor) throw new Error("SERVICE_ALREADY_CLAIMED");
+    transaction.update(requestRef, { ...buildServiceProgressUpdate(snapshotData, data, actor), updatedAt: serverTimestamp() });
+  });
+  return snapshotData;
+}
+
 function validateServiceCompletion(request, data) {
   if (/\b(senha|password|credencial)\b/i.test(`${data.newMessage || ""}`)) return "Por segurança, não envie nem registre senha ou credenciais na conversa.";
   if (`${data.deliveryStatus || ""}` !== "Concluído") return "";
@@ -3823,7 +3896,7 @@ async function applyServiceDeliveryCompletion(request, data) {
   const actor = state.currentSystemUser?.nome || state.currentSystemUser?.login || "Conduzir";
   const workData = getServiceWorkData(data);
   if (["candidate_report", "candidate_feedback"].includes(rule.completionAction) && (candidate || request.candidateEmail || request.email)) {
-    await saveFeedback({
+    const feedbackPayload = {
       tipo: request.tipo || "Serviço concluído",
       candidato: candidate?.nome || request.candidateName || request.nome || "Candidato",
       candidateUid: candidate?.uid || candidate?.id || request.candidateId || request.uid || "",
@@ -3835,7 +3908,18 @@ async function applyServiceDeliveryCompletion(request, data) {
       deliveryRequestId: request.id || "",
       deliveredBy: actor,
       visibleToCandidate: rule.exposeToBuyer !== false
-    });
+    };
+    if (state.mode === "cloud" && state.firestore && request.id) {
+      await setDoc(doc(state.firestore, COLLECTIONS.feedbacks, `service_${request.id}`), {
+        ...feedbackPayload,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } else {
+      const existing = state.feedbacks.find((item) => `${item.deliveryRequestId || ""}` === `${request.id || ""}`);
+      if (existing?.id) await updateRecord("feedbacks", existing.id, feedbackPayload);
+      else await saveFeedback(feedbackPayload);
+    }
   }
   if ((["candidate_status", "candidate_resume", "candidate_linkedin", "candidate_resume_linkedin"].includes(rule.completionAction) || rule.updateCandidateProfile) && candidate?.id) {
     const payload = {
@@ -4460,28 +4544,16 @@ async function readCandidateResumeFile(form) {
     const button = event.target.closest("[data-candidate-highlight-plan]");
     if (!button) return;
     if (!state.currentCandidateUser && !state.currentCandidateProfile) return createNotice("Faça login para solicitar um plano de destaque.", button.parentElement);
+    const catalogPlan = getCatalogItemByCode(button.dataset.candidateHighlightPlan) || {};
+    if (!window.confirm(`Confirmar a contratação de ${catalogPlan.title || button.dataset.planTitle || "este serviço"} por ${formatCurrencyBRL(catalogPlan.price || button.dataset.planPrice || 0)}? Você será direcionado ao pagamento seguro.`)) return;
     try {
-      setButtonBusy(button, "Enviando...", button.textContent || "Solicitar", true);
-      const catalogPlan = getCatalogItemByCode(button.dataset.candidateHighlightPlan) || {};
-      await saveServiceRequest(buildServiceRequestFromCatalog(catalogPlan, {
-        tipo: button.dataset.planTitle || catalogPlan.title || "Quero me destacar",
-        origin: "candidate_highlight_plan",
-        status: "Avaliação solicitada",
-        paymentStatus: "Pagamento simbólico pendente",
-        deliveryStatus: "Pendente",
-        candidateUid: getCurrentCandidateUid(),
-        email: state.currentCandidateUser?.email || state.currentCandidateProfile?.email || "",
-        candidateName: state.currentCandidateProfile?.nome || state.currentCandidateUser?.displayName || "",
-        mensagem: "Candidato solicitou plano Quero me destacar. Pagamento não garante validação; decisão depende da consultora."
-      }));
-      await updateCurrentCandidateStatus("Avaliação solicitada");
-      await hydrateInitialData();
-      createNotice("Plano de destaque solicitado. A validação continua dependendo da análise da consultora.", button.parentElement);
+      setButtonBusy(button, "Abrindo checkout...", button.textContent || "Contratar", true);
+      await startCandidateCheckout(catalogPlan);
     } catch (error) {
       console.error(error);
-      createNotice("Não foi possível solicitar este plano agora.", button.parentElement);
+      createNotice(error.message || "Não foi possível iniciar o pagamento agora.", button.parentElement, "error");
     } finally {
-      setButtonBusy(button, "Enviando...", button.dataset.idleLabel || "Solicitar este plano", false);
+      setButtonBusy(button, "Abrindo checkout...", button.dataset.idleLabel || "Contratar", false);
     }
   });
 
@@ -4494,32 +4566,16 @@ async function readCandidateResumeFile(form) {
     const payload = Object.fromEntries(new FormData(candidateServiceForm).entries());
     const button = candidateServiceForm.querySelector('button[type="submit"]');
     const catalogService = getCatalogItemByCode(payload.tipo) || getCatalogItemsByType("service").find((item) => item.title === payload.tipo) || {};
+    if (!catalogService?.code && !catalogService?.id) return createNotice("Escolha um serviço publicado pelo administrador.", candidateServiceForm.parentElement, "error");
+    if (!window.confirm(`Confirmar a contratação de ${catalogService.title || payload.tipo} por ${formatCurrencyBRL(catalogService.price || 0)}? Você será direcionado ao pagamento seguro.`)) return;
     try {
-      setButtonBusy(button, "Salvando...", button?.textContent || "Solicitar serviço", true);
-      await saveServiceRequest(buildServiceRequestFromCatalog(catalogService, {
-        ...payload,
-        tipo: catalogService.title || payload.tipo,
-        origin: "candidate",
-        uid: getCurrentCandidateUid(),
-        candidateUid: getCurrentCandidateUid(),
-        email: state.currentCandidateUser?.email || payload.email || state.currentCandidateProfile?.email || "",
-        candidateEmail: state.currentCandidateUser?.email || payload.email || state.currentCandidateProfile?.email || "",
-        nome: state.currentCandidateProfile?.nome || state.currentCandidateUser?.displayName || "",
-        status: payload.tipo?.includes("Quero me destacar") ? "Avaliação solicitada" : "Solicitado",
-        paymentStatus: payload.tipo?.includes("Quero me destacar") ? "Pagamento simbólico pendente" : "Pendente"
-      }));
-      if (payload.tipo?.includes("Quero me destacar") && (state.currentCandidateProfile || state.currentCandidateUser)) {
-        await persistCandidateProfile({ ...(state.currentCandidateProfile || {}), candidateStatus: "Avaliação solicitada" });
-      }
-      clearFormFields(candidateServiceForm);
-      const serviceEmailField = candidateServiceForm.querySelector('input[name="email"]');
-      if (serviceEmailField) serviceEmailField.value = state.currentCandidateUser?.email || state.currentCandidateProfile?.email || "";
-      createNotice("Dados salvos com sucesso.", candidateServiceForm.parentElement);
+      setButtonBusy(button, "Abrindo checkout...", button?.textContent || "Contratar serviço", true);
+      await startCandidateCheckout(catalogService);
     } catch (error) {
       console.error(error);
-      createNotice("Não foi possível enviar a solicitação agora.", candidateServiceForm.parentElement);
+      createNotice(error.message || "Não foi possível iniciar o pagamento agora.", candidateServiceForm.parentElement, "error");
     } finally {
-      setButtonBusy(button, "Salvando...", button?.dataset?.idleLabel || "Solicitar serviço", false);
+      setButtonBusy(button, "Abrindo checkout...", button?.dataset?.idleLabel || "Contratar serviço", false);
     }
   });
 
@@ -4890,6 +4946,7 @@ function initFeedbackPage() {
   deliveryForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(deliveryForm).entries());
+    if (`${data.deliveryStatus || ""}` === "Concluído" && !window.confirm("Confirmar a conclusão e a entrega deste serviço? As informações serão aplicadas ao perfil do cliente.")) return;
     const button = deliveryForm.querySelector('button[type="submit"]');
     try {
       setButtonBusy(button, "Salvando...", button?.textContent || "Salvar", true);
@@ -4899,8 +4956,9 @@ function initFeedbackPage() {
       if (request.claimedBy && request.claimedBy !== actor) throw new Error("SERVICE_ALREADY_CLAIMED");
       const validationMessage = validateServiceCompletion(request, data);
       if (validationMessage) throw Object.assign(new Error("SERVICE_VALIDATION"), { userMessage: validationMessage });
-      await updateRecord("serviceRequests", data.requestId, buildServiceProgressUpdate(request, data, actor));
-      await applyServiceDeliveryCompletion({ ...request, id: data.requestId }, data);
+      const savedRequest = await saveServiceProgressWithClaim(data.requestId, data, actor);
+      await applyServiceDeliveryCompletion({ ...savedRequest, id: data.requestId }, data);
+      if (`${data.deliveryStatus || ""}` === "Concluído") await updateRecord("serviceRequests", data.requestId, { completionApplied: true, completionAppliedAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString() });
       await hydrateInitialData();
       clearFormFields(deliveryForm);
       createNotice("Dados salvos com sucesso.", deliveryForm.parentElement);
@@ -5074,12 +5132,12 @@ function fillAdminUserForm(user) {
 function initAdminUserManagement() {
   const bootstrapArea = document.getElementById("adminBootstrapArea");
   if (bootstrapArea) bootstrapArea.classList.toggle("is-hidden", state.systemUsers.some((item) => isMasterAdminRecord(item)));
-  document.getElementById("adminBootstrapForm")?.addEventListener("submit", async (event) => { event.preventDefault(); const payload = Object.fromEntries(new FormData(event.target).entries()); try { await maybeCreateFirstAdmin(payload); createNotice("Administrador mestre criado com sucesso. Use o login fixo informado na tela para entrar.", event.target.parentElement); event.target.reset(); await hydrateInitialData(); bootstrapArea?.classList.add("is-hidden"); } catch (error) { console.error(error); createNotice(error.message === "ADMIN_ALREADY_EXISTS"
+  document.getElementById("adminBootstrapForm")?.addEventListener("submit", async (event) => { event.preventDefault(); const payload = Object.fromEntries(new FormData(event.target).entries()); const button = event.target.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Criando...", button?.textContent || "Criar administrador", true); await maybeCreateFirstAdmin(payload); createNotice("Administrador mestre criado com sucesso. Use o login fixo informado na tela para entrar.", event.target.parentElement); event.target.reset(); await hydrateInitialData(); bootstrapArea?.classList.add("is-hidden"); } catch (error) { console.error(error); createNotice(error.message === "ADMIN_ALREADY_EXISTS"
         ? "O administrador mestre já existe. Entre com o acesso fixo definido."
         : error.message === "AUTH_REQUIRED"
           ? "Não foi possível criar o administrador mestre agora. Tente novamente em instantes."
-          : "Não foi possível criar o administrador mestre agora.", event.target.parentElement); } });
-  document.getElementById("systemLoginForm-admin")?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target).entries()); try { await loginSystemUser("Administrador", data); showSystemAuthNotice("Administrador", "Login realizado com sucesso."); } catch (error) { showSystemAuthNotice("Administrador", "Use somente o acesso mestre definido pela Conduzir. Se for o primeiro acesso, crie esse administrador no bloco acima.", "error"); } });
+          : "Não foi possível criar o administrador mestre agora.", event.target.parentElement); } finally { setButtonBusy(button, "Criando...", button?.dataset?.idleLabel || "Criar administrador", false); } });
+  document.getElementById("systemLoginForm-admin")?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target).entries()); const button = event.target.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Entrando...", button?.textContent || "Entrar", true); await loginSystemUser("Administrador", data); showSystemAuthNotice("Administrador", "Login realizado com sucesso."); } catch (error) { showSystemAuthNotice("Administrador", "Use somente o acesso mestre definido pela Conduzir. Se for o primeiro acesso, crie esse administrador no bloco acima.", "error"); } finally { setButtonBusy(button, "Entrando...", button?.dataset?.idleLabel || "Entrar", false); } });
   document.getElementById("systemLogoutBtn-admin")?.addEventListener("click", async () => { await logoutSystemUser("Administrador"); showSystemAuthNotice("Administrador", "Você saiu da área administrativa.", "info"); });
   const form = document.getElementById("adminUserForm");
   if (!form) return;
@@ -5387,12 +5445,12 @@ async function init() {
       if (isCandidatePage()) {
         state.currentCandidateUser = user || null;
         await loadCandidateProfileForCurrentUser();
-        if (user) await hydrateInitialData();
+        if (user) { await hydrateInitialData(); bindAuthorizedServiceRequests(); }
       }
       if (isCompanyPage()) {
         state.currentCompanyUser = user || null;
         await loadCompanyProfileForCurrentUser();
-        if (user) await hydrateInitialData();
+        if (user) { await hydrateInitialData(); bindAuthorizedServiceRequests(); }
       }
     });
   }
@@ -5411,6 +5469,7 @@ async function init() {
       };
       syncSystemUiState(expectedRole);
       await hydrateInitialData();
+      bindAuthorizedServiceRequests();
     });
   }
   if (state.mode === "local" && (isAdminPage() || isConsultantPage())) {

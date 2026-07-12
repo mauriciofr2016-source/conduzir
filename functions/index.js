@@ -210,14 +210,15 @@ async function authenticateCompany(req) {
   return decoded;
 }
 
-async function getCatalogCheckoutItem(identifier) {
+async function getCatalogCheckoutItem(identifier, accountType = "company") {
   const item = await findCatalogItem(identifier);
   if (!item) throw Object.assign(new Error("CATALOG_ITEM_NOT_FOUND"), { status: 404 });
   const audience = `${item.audience || "company"}`.toLowerCase();
   const type = `${item.type || "plan"}`.toLowerCase();
-  const audienceAllowed = type === "service"
-    ? ["company", "company_service", "candidate_service"].includes(audience)
-    : audience === "company";
+  const allowedAudiences = accountType === "candidate"
+    ? ["candidate", "candidate_service"]
+    : ["company", "company_service"];
+  const audienceAllowed = allowedAudiences.includes(audience);
   if (item.deleted || item.active === false || !audienceAllowed || !["plan", "service"].includes(type)) {
     throw Object.assign(new Error("CATALOG_ITEM_UNAVAILABLE"), { status: 409 });
   }
@@ -229,32 +230,34 @@ async function getCatalogCheckoutItem(identifier) {
   });
 }
 
-async function reserveCheckout(companyRef, item) {
+async function reserveCheckout(accountRef, item, accountType = "company") {
   return db.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(companyRef);
-    if (!snapshot.exists) throw Object.assign(new Error("403_COMPANY_NOT_FOUND"), { status: 403 });
-    const company = snapshot.data();
+    const snapshot = await transaction.get(accountRef);
+    if (!snapshot.exists) throw Object.assign(new Error(accountType === "candidate" ? "403_CANDIDATE_NOT_FOUND" : "403_COMPANY_NOT_FOUND"), { status: 403 });
+    const account = snapshot.data();
     const now = Date.now();
-    const lockAt = company.billingCheckoutLockedAt?.toDate?.();
+    const lockAt = account.billingCheckoutLockedAt?.toDate?.();
     if (lockAt && now - lockAt.getTime() < CHECKOUT_LOCK_MINUTES * 60 * 1000) {
       throw Object.assign(new Error("CHECKOUT_IN_PROGRESS"), { status: 409 });
     }
     const itemKind = getCatalogItemKind(item);
-    const idempotencyKey = safeDocumentId(`${companyRef.id}:${item.id}:${itemKind}:${Math.floor(now / (CHECKOUT_LOCK_MINUTES * 60 * 1000))}`);
+    const idempotencyKey = safeDocumentId(`${accountType}:${accountRef.id}:${item.id}:${itemKind}:${Math.floor(now / (CHECKOUT_LOCK_MINUTES * 60 * 1000))}`);
     const sessionRef = db.collection("payment_sessions").doc(idempotencyKey);
     const sessionSnapshot = await transaction.get(sessionRef);
     const session = sessionSnapshot.exists ? sessionSnapshot.data() : null;
     if (session?.status === "Aguardando pagamento" && session?.sessionUrl) {
       return { duplicate: true, sessionRef, session };
     }
-    transaction.update(companyRef, {
+    transaction.update(accountRef, {
       billingCheckoutLockedAt: FieldValue.serverTimestamp(),
       billingCheckoutCatalogItemId: item.id,
       billingCheckoutPlanCode: item.code,
       updatedAt: FieldValue.serverTimestamp()
     });
     transaction.set(sessionRef, {
-      companyUid: companyRef.id,
+      accountType,
+      companyUid: accountType === "company" ? accountRef.id : "",
+      candidateUid: accountType === "candidate" ? accountRef.id : "",
       catalogItemId: item.id,
       planCode: item.code,
       itemKind,
@@ -267,8 +270,8 @@ async function reserveCheckout(companyRef, item) {
   });
 }
 
-async function releaseCheckout(companyRef, errorMessage = "") {
-  await companyRef.set({
+async function releaseCheckout(accountRef, errorMessage = "") {
+  await accountRef.set({
     billingCheckoutLockedAt: FieldValue.delete(),
     billingCheckoutCatalogItemId: FieldValue.delete(),
     billingCheckoutPlanCode: FieldValue.delete(),
@@ -277,40 +280,40 @@ async function releaseCheckout(companyRef, errorMessage = "") {
   }, { merge: true });
 }
 
-async function ensureAsaasCustomer(client, companyRef, company, requestBody = {}) {
-  if (company.asaasCustomerId) {
+async function ensureAsaasCustomer(client, accountRef, account, requestBody = {}, accountType = "company") {
+  if (account.asaasCustomerId) {
     try {
-      await client.getCustomer(company.asaasCustomerId);
-      return company.asaasCustomerId;
+      await client.getCustomer(account.asaasCustomerId);
+      return account.asaasCustomerId;
     } catch (error) {
       if (error.status !== 404) throw error;
     }
   }
 
   const cpfCnpj = resolveBillingDocument(
-    company.cnpj,
-    company.cpfCnpj,
-    company.cpf,
-    company.documento,
-    company.document,
-    company.billingDocument,
+    account.cnpj,
+    account.cpfCnpj,
+    account.cpf,
+    account.documento,
+    account.document,
+    account.billingDocument,
     requestBody.companyDocument,
     requestBody.cpfCnpj,
     requestBody.cnpj,
     requestBody.cpf
   );
   if (!cpfCnpj) {
-    throw Object.assign(new Error("COMPANY_DOCUMENT_REQUIRED"), { status: 422 });
+    throw Object.assign(new Error(accountType === "candidate" ? "CANDIDATE_DOCUMENT_REQUIRED" : "COMPANY_DOCUMENT_REQUIRED"), { status: 422 });
   }
   const customer = await client.createCustomer({
-    name: `${company.empresa || company.nome || "Empresa"}`.trim(),
+    name: `${account.empresa || account.nome || (accountType === "candidate" ? "Candidato" : "Empresa")}`.trim(),
     cpfCnpj,
-    email: `${company.email || company.authEmail || ""}`.trim(),
-    mobilePhone: digitsOnly(company.telefone),
-    externalReference: company.uid || companyRef.id,
+    email: `${account.email || account.authEmail || ""}`.trim(),
+    mobilePhone: digitsOnly(account.telefone),
+    externalReference: `${accountType}:${account.uid || accountRef.id}`,
     notificationDisabled: false
   });
-  await companyRef.set({
+  await accountRef.set({
     cnpj: cpfCnpj,
     cpfCnpj,
     asaasCustomerId: customer.id,
@@ -363,19 +366,20 @@ exports.createAsaasCheckout = onRequest({
   }
   if (req.method !== "POST") return sendError(res, 405, "METHOD_NOT_ALLOWED", "Use POST.");
 
-  let companyRef;
+  let accountRef;
   try {
     const auth = await authenticateCompany(req);
+    const accountType = `${req.body?.accountType || "company"}`.trim().toLowerCase() === "candidate" ? "candidate" : "company";
     const catalogItemId = `${req.body?.catalogItemId || req.body?.itemId || req.body?.planCode || req.body?.itemCode || req.body?.serviceCode || ""}`.trim();
     if (!catalogItemId) return sendError(res, 400, "CATALOG_ITEM_ID_REQUIRED", "Informe o plano ou serviço.");
 
-    companyRef = db.collection("companies").doc(auth.uid);
+    accountRef = db.collection(accountType === "candidate" ? "candidates" : "companies").doc(auth.uid);
     const [item, billingSnapshot] = await Promise.all([
-      getCatalogCheckoutItem(catalogItemId),
+      getCatalogCheckoutItem(catalogItemId, accountType),
       db.collection("billing_settings").doc("main").get()
     ]);
     authDebug(req, "company_lookup_start", { uid: auth.uid, catalogItemId, resolvedCatalogItemId: item.id, planCode: item.code });
-    const companySnapshot = await companyRef.get();
+    const companySnapshot = await accountRef.get();
     authDebug(req, "company_lookup_result", {
       uid: auth.uid,
       companyFound: companySnapshot.exists,
@@ -384,9 +388,9 @@ exports.createAsaasCheckout = onRequest({
     });
     if (!companySnapshot.exists) {
       authDebug(req, "returning_403", { reason: "403_COMPANY_NOT_FOUND", uid: auth.uid });
-      throw Object.assign(new Error("403_COMPANY_NOT_FOUND"), { status: 403 });
+      throw Object.assign(new Error(accountType === "candidate" ? "403_CANDIDATE_NOT_FOUND" : "403_COMPANY_NOT_FOUND"), { status: 403 });
     }
-    const reservation = await reserveCheckout(companyRef, item);
+    const reservation = await reserveCheckout(accountRef, item, accountType);
     if (reservation.duplicate) {
       return res.status(200).json({
         sessionId: reservation.sessionRef.id,
@@ -424,12 +428,12 @@ exports.createAsaasCheckout = onRequest({
       apiKey: asaasApiKey.value(),
       environment: resolvedAsaasEnvironment
     });
-    const customerId = await ensureAsaasCustomer(client, companyRef, company, req.body || {});
+    const customerId = await ensureAsaasCustomer(client, accountRef, company, req.body || {}, accountType);
     const contractedAt = new Date();
     const trialDays = Math.max(0, Number(billing.trialDays || 0));
     const dueDate = toDateOnly(addDays(contractedAt, trialDays));
     const cycle = normalizeCycle(item.billingCycle);
-    const externalReference = makeExternalReference(auth.uid, `${itemKind}:${item.id}`);
+    const externalReference = makeExternalReference(auth.uid, `${accountType}:${itemKind}:${item.id}`);
     const serviceContext = req.body?.serviceContext && typeof req.body.serviceContext === "object"
       ? {
         candidateId: `${req.body.serviceContext.candidateId || ""}`.trim(),
@@ -491,7 +495,7 @@ exports.createAsaasCheckout = onRequest({
 
     const batch = db.batch();
     if (itemKind === "subscription") {
-      batch.set(companyRef, {
+      batch.set(accountRef, {
         ...contract,
         recurringPermissions: item.permissions,
         billingCheckoutLockedAt: FieldValue.delete(),
@@ -500,7 +504,7 @@ exports.createAsaasCheckout = onRequest({
         billingCheckoutError: FieldValue.delete()
       }, { merge: true });
     } else {
-      batch.set(companyRef, {
+      batch.set(accountRef, {
         asaasCustomerId: customerId,
         billingCheckoutLockedAt: FieldValue.delete(),
         billingCheckoutCatalogItemId: FieldValue.delete(),
@@ -510,8 +514,11 @@ exports.createAsaasCheckout = onRequest({
       }, { merge: true });
     }
     batch.set(sessionRef, {
-      companyUid: auth.uid,
-      companyName: company.empresa || "Empresa",
+      accountType,
+      companyUid: accountType === "company" ? auth.uid : "",
+      candidateUid: accountType === "candidate" ? auth.uid : "",
+      companyName: accountType === "company" ? (company.empresa || "Empresa") : "",
+      candidateName: accountType === "candidate" ? (company.nome || "Candidato") : "",
       contactEmail: company.email || auth.email || "",
       ...contract,
       serviceContext,
@@ -524,7 +531,11 @@ exports.createAsaasCheckout = onRequest({
     if (historyRef) {
       batch.set(historyRef, {
         catalogItemId: item.id,
-        companyUid: auth.uid,
+        accountType,
+        companyUid: accountType === "company" ? auth.uid : "",
+        candidateUid: accountType === "candidate" ? auth.uid : "",
+        candidateName: accountType === "candidate" ? (company.nome || "Candidato") : "",
+        candidateEmail: accountType === "candidate" ? (company.email || auth.email || "") : "",
         planCode: item.code,
         planName: item.title || item.name,
         contractedPlanPrice: Number(item.price),
@@ -563,7 +574,7 @@ exports.createAsaasCheckout = onRequest({
       status: error.status,
       details: error.details
     });
-    if (companyRef) await releaseCheckout(companyRef, error.message).catch(() => {});
+    if (accountRef) await releaseCheckout(accountRef, error.message).catch(() => {});
     const status = Number(error.status) || (error.code?.startsWith("auth/") ? 401 : 500);
     if (status === 401 || status === 403) {
       authDebug(req, status === 401 ? "returning_401" : "returning_403", {
@@ -575,6 +586,7 @@ exports.createAsaasCheckout = onRequest({
       AUTH_REQUIRED: "Faça login novamente.",
       COMPANY_NOT_FOUND: "Cadastro da empresa não encontrado.",
       COMPANY_DOCUMENT_REQUIRED: "Informe um CPF ou CNPJ válido no cadastro da empresa.",
+      CANDIDATE_DOCUMENT_REQUIRED: "Informe um CPF válido no seu perfil antes de contratar.",
       PLAN_NOT_FOUND: "Plano não encontrado.",
       PLAN_UNAVAILABLE: "Plano indisponível.",
       PLAN_PRICE_INVALID: "Preço do plano inválido.",
@@ -590,6 +602,7 @@ exports.createAsaasCheckout = onRequest({
       "401_TOKEN_INVALID": "401_TOKEN_INVALID",
       "403_COMPANY_NOT_FOUND": "403_COMPANY_NOT_FOUND",
       "403_COMPANY_NOT_ALLOWED": "403_COMPANY_NOT_ALLOWED",
+      "403_CANDIDATE_NOT_FOUND": "Cadastro do candidato não encontrado.",
       CHECKOUT_IN_PROGRESS: "Já existe uma contratação em andamento."
     };
     return sendError(res, status, error.message || "CHECKOUT_FAILED",
@@ -614,6 +627,22 @@ async function findCompanyForPayment(payment) {
     if (!byCustomer.empty) return byCustomer.docs[0];
   }
   return null;
+}
+
+async function findBillingAccountForPayment(payment) {
+  const paymentId = `${payment?.id || ""}`;
+  if (paymentId) {
+    const history = await db.collection("payment_history").doc(paymentId).get();
+    if (history.exists) {
+      const data = history.data() || {};
+      if (data.accountType === "candidate" && data.candidateUid) {
+        const candidate = await db.collection("candidates").doc(data.candidateUid).get();
+        if (candidate.exists) return { doc: candidate, accountType: "candidate", history: data };
+      }
+    }
+  }
+  const company = await findCompanyForPayment(payment);
+  return company ? { doc: company, accountType: "company", history: null } : null;
 }
 
 exports.asaasWebhook = onRequest({
@@ -655,8 +684,8 @@ exports.asaasWebhook = onRequest({
       await eventRef.set({ status: "ignored", processedAt: FieldValue.serverTimestamp() }, { merge: true });
       return res.status(200).json({ received: true, ignored: true });
     }
-    const companyDoc = await findCompanyForPayment(payment);
-    if (!companyDoc) {
+    const billingAccount = await findBillingAccountForPayment(payment);
+    if (!billingAccount) {
       await eventRef.set({
         status: "unmatched",
         processedAt: FieldValue.serverTimestamp()
@@ -665,20 +694,59 @@ exports.asaasWebhook = onRequest({
       return res.status(200).json({ received: true, unmatched: true });
     }
 
+    const companyDoc = billingAccount.doc;
+    const accountType = billingAccount.accountType;
     const company = companyDoc.data();
     const state = resolveCompanyPaymentState(company, payment);
     const amount = Number(payment.value || 0);
     const paidAmount = state.paid ? Number(payment.value || 0) : 0;
     const historyRef = db.collection("payment_history").doc(payment.id);
     const existingHistory = await historyRef.get();
-    const history = existingHistory.exists ? existingHistory.data() : {};
+    const history = existingHistory.exists ? existingHistory.data() : (billingAccount.history || {});
     const itemKind = history.itemKind || (payment.subscription ? "subscription" : "service");
     const permissions = resolveCheckoutPermissions(history.permissions, company.recurringPermissions || company.permissions);
     const latestDueDate = `${payment.dueDate || ""}` >= `${company.lastPaymentDueDate || ""}`
       ? `${payment.dueDate || company.lastPaymentDueDate || ""}`
       : `${company.lastPaymentDueDate || ""}`;
     const batch = db.batch();
-    if (itemKind === "subscription") {
+    if (accountType === "candidate") {
+      batch.set(companyDoc.ref, {
+        asaasCustomerId: payment.customer || company.asaasCustomerId || "",
+        asaasSubscriptionId: payment.subscription || company.asaasSubscriptionId || "",
+        asaasPaymentId: payment.id,
+        paymentStatus: state.paymentStatus,
+        lastPaymentEvent: event.event,
+        lastPaymentStatus: payment.status || "",
+        lastPaymentAt: state.paid && state.changesAccess ? FieldValue.serverTimestamp() : (company.lastPaymentAt || null),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+      if (state.paid) {
+        const serviceRef = db.collection("service_requests").doc(payment.id);
+        batch.set(serviceRef, {
+          origin: "candidate",
+          uid: companyDoc.id,
+          candidateUid: companyDoc.id,
+          candidateId: companyDoc.id,
+          candidateName: company.nome || "Candidato",
+          nome: company.nome || "Candidato",
+          email: company.email || company.authEmail || "",
+          candidateEmail: company.email || company.authEmail || "",
+          tipo: history.planName || "Serviço para candidato",
+          serviceCode: history.planCode || "",
+          servicePrice: Number(history.contractedPlanPrice || amount),
+          servicePermissions: permissions,
+          deliveryRule: history.deliveryRule || {},
+          assignedTo: history.assignedTo || history.deliveryRule?.assignee || "consultant",
+          mensagem: `Pagamento confirmado pelo Asaas: ${history.planName || payment.description || ""}`,
+          status: "Pagamento confirmado",
+          deliveryStatus: "Contratado",
+          paymentStatus: state.paymentStatus,
+          asaasPaymentId: payment.id,
+          createdAt: history.createdAt || FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+      }
+    } else if (itemKind === "subscription") {
       batch.set(companyDoc.ref, {
         asaasCustomerId: payment.customer || company.asaasCustomerId || "",
         asaasSubscriptionId: payment.subscription || company.asaasSubscriptionId || "",
@@ -731,7 +799,9 @@ exports.asaasWebhook = onRequest({
       }
     }
     batch.set(historyRef, {
-      companyUid: companyDoc.id,
+      accountType,
+      companyUid: accountType === "company" ? companyDoc.id : "",
+      candidateUid: accountType === "candidate" ? companyDoc.id : "",
       planCode: history.planCode || company.planCode || "",
       planName: history.planName || company.planName || "",
       contractedPlanPrice: Number(history.contractedPlanPrice || company.contractedPlanPrice || amount),
@@ -754,7 +824,9 @@ exports.asaasWebhook = onRequest({
     }, { merge: true });
     batch.set(eventRef, {
       status: "processed",
-      companyUid: companyDoc.id,
+      accountType,
+      companyUid: accountType === "company" ? companyDoc.id : "",
+      candidateUid: accountType === "candidate" ? companyDoc.id : "",
       processedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
