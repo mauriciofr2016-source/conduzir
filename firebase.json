@@ -46,6 +46,22 @@
           "functionId": "asaasWebhook",
           "region": "southamerica-east1"
         }
+      },
+      {
+        "source": "/admin",
+        "destination": "/admin.html"
+      },
+      {
+        "source": "/consultora",
+        "destination": "/consultora.html"
+      },
+      {
+        "source": "/empresa",
+        "destination": "/empresa.html"
+      },
+      {
+        "source": "/candidato",
+        "destination": "/candidato.html"
       }
     ]
   },

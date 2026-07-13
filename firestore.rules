@@ -29,28 +29,28 @@ service cloud.firestore {
     }
 
     function ownsCandidateData(data) {
-      return signedIn() && (data.uid == request.auth.uid || data.candidateUid == request.auth.uid);
+      return signedIn() && (data.get("uid", "") == request.auth.uid || data.get("candidateUid", "") == request.auth.uid);
     }
 
     function ownsCompanyData(data) {
-      return signedIn() && data.companyUid == request.auth.uid;
+      return signedIn() && data.get("companyUid", "") == request.auth.uid;
     }
 
     function isStaff() {
       return isAdmin() || (signedIn()
         && exists(/databases/$(database)/documents/system_users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/system_users/$(request.auth.uid)).data.deleted != true
-        && get(/databases/$(database)/documents/system_users/$(request.auth.uid)).data.status != "Bloqueado");
+        && get(/databases/$(database)/documents/system_users/$(request.auth.uid)).data.get("deleted", false) != true
+        && get(/databases/$(database)/documents/system_users/$(request.auth.uid)).data.get("status", "Ativo") != "Bloqueado");
     }
 
     function ownsService(data) {
       return signedIn() && (
-        data.candidateUid == request.auth.uid
-        || data.uid == request.auth.uid
-        || data.companyUid == request.auth.uid
-        || data.candidateEmail == request.auth.token.email
-        || data.email == request.auth.token.email
-        || data.contactEmail == request.auth.token.email
+        data.get("candidateUid", "") == request.auth.uid
+        || data.get("uid", "") == request.auth.uid
+        || data.get("companyUid", "") == request.auth.uid
+        || data.get("candidateEmail", "") == request.auth.token.email
+        || data.get("email", "") == request.auth.token.email
+        || data.get("contactEmail", "") == request.auth.token.email
       );
     }
 
@@ -175,7 +175,7 @@ service cloud.firestore {
         || (signedIn() && request.auth.uid == id
           && request.resource.data.uid == request.auth.uid
           && financialFieldsUnchanged()
-          && request.resource.data.diff(resource.data).affectedKeys().hasNone([
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
             "validated", "seloConduzir", "decisionBy", "decisionAt",
             "lastServiceDeliveredAt", "lastServiceDeliveredBy", "lastServiceDeliveryMessage"
           ])
@@ -205,7 +205,7 @@ service cloud.firestore {
     }
 
     match /system_users/{id} {
-      allow read: if isStaff();
+      allow read: if isStaff() || (signedIn() && request.auth.uid == id);
       allow write: if isAdmin();
     }
 

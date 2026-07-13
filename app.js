@@ -76,7 +76,7 @@ const COLLECTIONS = {
 const MASTER_ADMIN = {
   login: "admin.master",
   email: "admin@conduzirtalentos.com",
-  nome: "Administrador Mestre",
+  nome: "Erika",
   perfil: "Administrador"
 };
 const PERMISSION_KEYS = [
@@ -148,11 +148,11 @@ function prepareSystemUserPayload(data = {}, currentUser = null) {
   return payload;
 }
 
-const defaultJobs = [
+const exampleJobs = [
   { titulo: "Analista de RH", area: "Recursos Humanos", modelo: "Presencial", status: "Aberta" }
 ];
 
-const defaultCatalogItems = [
+const exampleCatalogItems = [
   {
     code: "candidato-destaque-essencial",
     type: "plan",
@@ -324,6 +324,9 @@ const defaultCatalogItems = [
     createdAt: "Cadastro inicial"
   }
 ];
+
+const defaultJobs = [];
+const defaultCatalogItems = [];
 
 const defaultBillingSettings = [{
   id: "default-billing-settings",
@@ -970,6 +973,21 @@ function setButtonBusy(button, busyLabel, idleLabel, isBusy) {
   button.disabled = isBusy;
   button.textContent = isBusy ? busyLabel : (button.dataset.idleLabel || idleLabel || button.textContent);
 }
+
+function initClickGuard() {
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button || button.disabled) return;
+    const now = Date.now();
+    const blockedUntil = Number(button.dataset.clickGuardUntil || 0);
+    if (blockedUntil > now) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    button.dataset.clickGuardUntil = `${now + 700}`;
+  }, true);
+}
 function clearLegacySensitiveLocalData() {
   [KEYS.candidateAccounts, KEYS.companyAccounts, "bt_company_auth_user"].forEach((key) => localStore.remove(key));
   const systemUsers = localStore.get(KEYS.systemUsers, []);
@@ -1038,7 +1056,7 @@ function isRecordOwnedByCurrentCandidate(item) {
   const currentUid = getCurrentCandidateUid();
   const currentEmail = getCurrentCandidateEmail();
   if (!item) return false;
-  const itemUid = `${item.uid || ""}`.trim();
+  const itemUid = `${item.uid || item.candidateUid || ""}`.trim();
   const itemEmail = `${item.email || item.candidateEmail || ""}`.trim().toLowerCase();
   return Boolean((currentUid && itemUid && itemUid === currentUid) || (currentEmail && itemEmail && itemEmail === currentEmail));
 }
@@ -1130,7 +1148,7 @@ function syncCandidateUiState() {
   const authShell = document.getElementById("candidateAuthShell");
   const dashboard = document.getElementById("candidateDashboard");
   const loggedText = document.getElementById("candidateLoggedUser");
-  const user = state.currentCandidateUser || state.currentCandidateProfile;
+  const user = state.currentCandidateProfile;
   if (authShell) authShell.classList.toggle("is-hidden", Boolean(user));
   if (dashboard) dashboard.classList.toggle("is-hidden", !user);
   if (loggedText) {
@@ -1164,6 +1182,13 @@ async function loginCandidateAccount({ email, senha }) {
   const profileRef = doc(state.firestore, COLLECTIONS.candidates, credentials.user.uid);
   const profileSnap = await getDoc(profileRef);
   const profileData = profileSnap.exists() ? profileSnap.data() : null;
+  if (!profileData) {
+    try { await signOut(state.auth); } catch {}
+    state.currentCandidateUser = null;
+    state.currentCandidateProfile = null;
+    setSessionUser(KEYS.candidateAuthUser, null);
+    throw new Error("CANDIDATE_NOT_FOUND");
+  }
   if (accountIsRestricted(profileData?.status)) {
     try { await signOut(state.auth); } catch {}
     throw new Error("ACCOUNT_BLOCKED");
@@ -1500,6 +1525,7 @@ async function loginSystemUser(role, data) {
   state.currentSystemUser = mergedUser;
   localStore.set(KEYS.systemSession, mergedUser);
   syncSystemUiState(role);
+  if (role === "Administrador") await cleanupLegacyCloudSensitiveData();
   await hydrateInitialData();
   return mergedUser;
 }
@@ -1511,25 +1537,8 @@ async function logoutSystemUser(role) {
   localStore.remove(KEYS.systemSession);
   syncSystemUiState(role);
 }
-async function maybeCreateFirstAdmin(payload) {
-  const users = await fetchCollection("systemUsers", []);
-  const existingMasterAdmin = users.find((item) => isMasterAdminRecord(item));
-  if (existingMasterAdmin) throw new Error("ADMIN_ALREADY_EXISTS");
-  if (!state.auth || state.mode !== "cloud") throw new Error("AUTH_REQUIRED");
-  await saveSystemUser({
-    nome: MASTER_ADMIN.nome,
-    login: MASTER_ADMIN.login,
-    email: MASTER_ADMIN.email,
-    senha: `${payload?.senha || ""}`.trim(),
-    contato: `${payload?.contato || ""}`.trim(),
-    observacoes: "Administrador mestre único do sistema.",
-    perfil: "Administrador",
-    status: "Ativo"
-  });
-}
-
 async function cleanupLegacyCloudSensitiveData() {
-  if (!state.firestore) return;
+  if (!state.firestore || !state.auth?.currentUser) return;
   try {
     const snapshot = await getDocs(collection(state.firestore, COLLECTIONS.systemUsers));
     const tasks = snapshot.docs
@@ -1593,7 +1602,8 @@ function bindAuthorizedServiceRequests() {
     state.serviceRequests = normalizeDocs(snapshot).sort((a, b) => `${b.createdAt?.seconds || b.createdAt || ""}`.localeCompare(`${a.createdAt?.seconds || a.createdAt || ""}`));
     renderServiceRequests(state.serviceRequests);
   }, (error) => {
-    if (!isPermissionError(error)) console.error("Não foi possível atualizar as notificações de serviços em tempo real:", error);
+    if (isPermissionError(error)) console.warn("Sem permissão para acompanhar a fila de serviços neste perfil.");
+    else console.error("Não foi possível atualizar as notificações de serviços em tempo real:", error);
   });
 }
 
@@ -1918,13 +1928,13 @@ function renderCompanyCatalogSections() {
   if (billingCards) {
     billingCards.innerHTML = `
       <article class="mini-card"><strong>${escapeHtml(getBillingProviderLabel(billing.provider))}</strong><p>Gateway principal configurado pelo admin.</p></article>
-      <article class="mini-card"><strong>${escapeHtml(getCheckoutModeLabel(billing.checkoutMode))}</strong><p>${billing.trialDays ? `Teste gratis de ${escapeHtml(billing.trialDays)} dia(s).` : 'Sem periodo de teste configurado.'}</p></article>
+      <article class="mini-card"><strong>${escapeHtml(getCheckoutModeLabel(billing.checkoutMode))}</strong><p>${billing.trialDays ? `Teste grátis de ${escapeHtml(billing.trialDays)} dia(s).` : 'Sem período de teste configurado.'}</p></article>
     `;
   }
 
   if (architectureNote) {
     architectureNote.textContent = billing.checkoutMode === "hosted_api" && billing.createCheckoutEndpoint
-      ? `Pagamento Asaas configurado via endpoint seguro. O valor do catalogo e usado somente para novas assinaturas e fica travado no contrato criado.`
+      ? `Pagamento Asaas configurado via endpoint seguro. O valor do catálogo é usado somente para novas assinaturas e fica travado no contrato criado.`
       : `O clique registra a intenção comercial com ${getBillingProviderLabel(billing.provider)}. Alterações de preço afetam apenas novas assinaturas.`;
   }
   updateNr1FloatingWhatsappButton();
@@ -2546,6 +2556,18 @@ async function fetchCollection(name, fallback = []) {
   return localStore.get(KEYS[name], fallback);
 }
 
+async function safeFetchCollection(name, fallback = []) {
+  try {
+    return await fetchCollection(name, fallback);
+  } catch (error) {
+    if (isPermissionError(error)) {
+      console.warn(`Leitura restrita para ${name}; mantendo os demais dados disponíveis.`);
+      return [];
+    }
+    throw error;
+  }
+}
+
 async function saveRecord(name, data) {
   if (state.mode === "cloud" && state.firestore) {
     await addDoc(collection(state.firestore, COLLECTIONS[name]), { ...data, createdAt: serverTimestamp() });
@@ -3067,6 +3089,8 @@ function initAdminServiceDeliveryManagement() {
       if (`${data.deliveryStatus || ""}` === "Concluído") await updateRecord("serviceRequests", data.requestId, { completionApplied: true, completionAppliedAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString() });
       await hydrateInitialData();
       clearFormFields(form);
+      const workspace = form.querySelector(".service-workspace");
+      if (workspace) workspace.innerHTML = "";
       createNotice("Dados salvos com sucesso.", form.parentElement);
     } catch (error) {
       console.error(error);
@@ -3682,10 +3706,12 @@ function renderCandidateTests() {
   const latestCandidate = (getCandidateScopedCandidates(state.candidates)[0] || state.currentCandidateProfile || {});
   const disc = getLatestCandidateDisc(latestCandidate) || scopedFeedbacks.find((item) => `${item.tipo || ""}`.toLowerCase() === "teste disc");
   const totalFeedbacks = scopedFeedbacks.length;
+  const deliveredReports = scopedFeedbacks.filter((item) => `${item.tipo || ""}`.toLowerCase() !== "teste disc");
   grid.innerHTML = `
     <article class="mini-card"><strong>Perfil comportamental</strong><p>Status: ${disc ? "DISC preenchido e disponível para análise" : "disponível para preenchimento"}.</p></article>
     <article class="mini-card"><strong>Avaliação psicossocial</strong><p>Status: ${totalFeedbacks > 1 ? "há registros de acompanhamento" : "em triagem"}.</p></article>
-    <article class="mini-card"><strong>Teste técnico</strong><p>Status: ${totalFeedbacks ? "acompanhe atualizações no parecer da consultora" : "ainda não solicitado"}.</p></article>`;
+    <article class="mini-card"><strong>Teste técnico</strong><p>Status: ${totalFeedbacks ? "acompanhe atualizações no parecer da consultora" : "ainda não solicitado"}.</p></article>
+    ${deliveredReports.map((item) => `<article class="stack-item"><strong>${escapeHtml(item.tipo || "Relatório profissional")}</strong><p><strong>Status:</strong> ${escapeHtml(item.status || item.resultado || "Concluído")}</p><p>${escapeHtml(item.parecer || "Relatório concluído pela equipe Conduzir.")}</p></article>`).join("")}`;
   const discHost = document.getElementById("candidateDiscResult");
   if (discHost) {
     discHost.innerHTML = disc ? `
@@ -4428,6 +4454,8 @@ function initCandidatePage() {
       console.error(error);
       const message = error?.message === "ACCOUNT_BLOCKED"
         ? "Seu acesso está bloqueado. Fale com o suporte para regularizar o cadastro."
+        : error?.message === "CANDIDATE_NOT_FOUND"
+        ? "Este usuário não possui cadastro de candidato vinculado. Use um acesso de candidato."
         : error?.code === "auth/invalid-credential"
         ? "E-mail ou senha incorretos."
         : error?.message === "AUTH_REQUIRED"
@@ -4448,34 +4476,6 @@ function initCandidatePage() {
       showCandidateAuthNotice("Não foi possível sair agora.", "error");
     }
   });
-
-  document.getElementById("fillCandidateDemo")?.addEventListener("click", () => {
-    if (!form) return;
-    const demo = {
-      nome: state.currentCandidateProfile?.nome || state.currentCandidateUser?.displayName || "Maurício Silva",
-      email: state.currentCandidateUser?.email || state.currentCandidateProfile?.email || "mauricio@email.com",
-      telefone: "(64) 99999-9999",
-      regiao: "Rio Verde - GO",
-      area: "Recursos Humanos",
-      nivel: "Pleno",
-      cargoDesejado: "Analista de Recursos Humanos",
-      pretensaoSalarial: "A combinar",
-      disponibilidade: "Imediata",
-      modeloTrabalho: "Presencial ou híbrido",
-      cnh: "B",
-      linkedinPortfolio: "linkedin.com/in/exemplo",
-      resumo: "Profissional com experiência em atendimento, rotinas administrativas, organização e relacionamento interpessoal.",
-      experiencias: "Empresa Exemplo — Assistente Administrativo — 2022 a 2025\nAtividades: atendimento, organização de documentos, controle de planilhas e apoio ao RH.",
-      formacao: "Ensino médio completo. Cursos livres em rotinas administrativas e atendimento.",
-      cursosCertificacoes: "Excel básico/intermediário; atendimento ao cliente; comunicação profissional.",
-      competencias: "Pacote Office, atendimento, organização de processos, comunicação, triagem inicial.",
-      idiomas: "Português nativo; inglês básico.",
-      valores: "Responsabilidade, ética, compromisso, respeito e boa comunicação.",
-      curriculoArquivo: "curriculo-mauricio.pdf"
-    };
-    fillCandidateForm(demo);
-  });
-
 
 async function readCandidateResumeFile(form) {
   const fileInput = form?.querySelector('input[name="curriculoArquivoFile"]');
@@ -4755,6 +4755,7 @@ function initJobPage() {
       const serviceCode = serviceButton.dataset.serviceContract || "";
       const catalogService = getCatalogItemByCode(serviceCode) || null;
       if (!catalogService) return showCompanyAuthNotice("Serviço não encontrado para iniciar a contratação.", "error");
+      if (!window.confirm(`Confirmar a contratação de ${catalogService.title || "este serviço"} por ${formatCurrencyBRL(catalogService.price || 0)}? Você será direcionado ao pagamento seguro.`)) return;
       try {
         setButtonBusy(serviceButton, "Abrindo checkout...", serviceButton.textContent || "Contratar Serviço", true);
         const result = await startProfessionalCheckout(catalogService, {
@@ -4784,6 +4785,7 @@ function initJobPage() {
     const code = button.dataset.planContract || "";
     const catalogPlan = getCatalogItemByCode(code) || getCatalogItemsByType("plan").find((item) => item.title === code) || null;
     if (!catalogPlan) return showCompanyAuthNotice("Plano não encontrado para iniciar a contratação.", "error");
+    if (!window.confirm(`Confirmar a contratação de ${catalogPlan.title || "este plano"} por ${formatCurrencyBRL(catalogPlan.price || 0)}? Você será direcionado ao pagamento seguro.`)) return;
     try {
       setButtonBusy(button, "Abrindo checkout...", button.textContent || "Contratar Plano", true);
       const result = await startProfessionalCheckout(catalogPlan);
@@ -4935,7 +4937,7 @@ function initFeedbackPage() {
     }
   });
   const consultantLoginForm = document.getElementById("systemLoginForm-consultora");
-  consultantLoginForm?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(consultantLoginForm).entries()); const button = consultantLoginForm.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Entrando...", button?.textContent || "Entrar", true); await loginSystemUser("Consultora", data); clearFormFields(consultantLoginForm); showSystemAuthNotice("Consultora", "Login realizado com sucesso. Redirecionando para a área da consultora."); } catch (error) { showSystemAuthNotice("Consultora", "Login ou senha inválidos.", "error"); } finally { setButtonBusy(button, "Entrando...", button?.dataset?.idleLabel || "Entrar", false); } });
+  consultantLoginForm?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(consultantLoginForm).entries()); const button = consultantLoginForm.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Entrando...", button?.textContent || "Entrar", true); await loginSystemUser("Consultora", data); clearFormFields(consultantLoginForm); showSystemAuthNotice("Consultora", "Login realizado com sucesso. Redirecionando para a área da consultora."); } catch (error) { console.error("Erro no login da consultora:", error); showSystemAuthNotice("Consultora", "Login ou senha inválidos.", "error"); } finally { setButtonBusy(button, "Entrando...", button?.dataset?.idleLabel || "Entrar", false); } });
   document.getElementById("systemLogoutBtn-consultora")?.addEventListener("click", async () => { await logoutSystemUser("Consultora"); showSystemAuthNotice("Consultora", "Você saiu da área da consultora.", "info"); });
   const deliveryForm = document.getElementById("serviceDeliveryForm");
   document.getElementById("consultantServiceQueue")?.addEventListener("click", (event) => {
@@ -4961,6 +4963,8 @@ function initFeedbackPage() {
       if (`${data.deliveryStatus || ""}` === "Concluído") await updateRecord("serviceRequests", data.requestId, { completionApplied: true, completionAppliedAt: state.mode === "cloud" ? serverTimestamp() : new Date().toISOString() });
       await hydrateInitialData();
       clearFormFields(deliveryForm);
+      const workspace = deliveryForm.querySelector(".service-workspace");
+      if (workspace) workspace.innerHTML = "";
       createNotice("Dados salvos com sucesso.", deliveryForm.parentElement);
     } catch (error) {
       console.error(error);
@@ -5130,14 +5134,7 @@ function fillAdminUserForm(user) {
 }
 
 function initAdminUserManagement() {
-  const bootstrapArea = document.getElementById("adminBootstrapArea");
-  if (bootstrapArea) bootstrapArea.classList.toggle("is-hidden", state.systemUsers.some((item) => isMasterAdminRecord(item)));
-  document.getElementById("adminBootstrapForm")?.addEventListener("submit", async (event) => { event.preventDefault(); const payload = Object.fromEntries(new FormData(event.target).entries()); const button = event.target.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Criando...", button?.textContent || "Criar administrador", true); await maybeCreateFirstAdmin(payload); createNotice("Administrador mestre criado com sucesso. Use o login fixo informado na tela para entrar.", event.target.parentElement); event.target.reset(); await hydrateInitialData(); bootstrapArea?.classList.add("is-hidden"); } catch (error) { console.error(error); createNotice(error.message === "ADMIN_ALREADY_EXISTS"
-        ? "O administrador mestre já existe. Entre com o acesso fixo definido."
-        : error.message === "AUTH_REQUIRED"
-          ? "Não foi possível criar o administrador mestre agora. Tente novamente em instantes."
-          : "Não foi possível criar o administrador mestre agora.", event.target.parentElement); } finally { setButtonBusy(button, "Criando...", button?.dataset?.idleLabel || "Criar administrador", false); } });
-  document.getElementById("systemLoginForm-admin")?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target).entries()); const button = event.target.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Entrando...", button?.textContent || "Entrar", true); await loginSystemUser("Administrador", data); showSystemAuthNotice("Administrador", "Login realizado com sucesso."); } catch (error) { showSystemAuthNotice("Administrador", "Use somente o acesso mestre definido pela Conduzir. Se for o primeiro acesso, crie esse administrador no bloco acima.", "error"); } finally { setButtonBusy(button, "Entrando...", button?.dataset?.idleLabel || "Entrar", false); } });
+  document.getElementById("systemLoginForm-admin")?.addEventListener("submit", async (event) => { event.preventDefault(); const data = Object.fromEntries(new FormData(event.target).entries()); const button = event.target.querySelector('button[type="submit"]'); try { setButtonBusy(button, "Entrando...", button?.textContent || "Entrar", true); await loginSystemUser("Administrador", data); showSystemAuthNotice("Administrador", "Login realizado com sucesso."); } catch (error) { showSystemAuthNotice("Administrador", "Login ou senha do administrador inválidos.", "error"); } finally { setButtonBusy(button, "Entrando...", button?.dataset?.idleLabel || "Entrar", false); } });
   document.getElementById("systemLogoutBtn-admin")?.addEventListener("click", async () => { await logoutSystemUser("Administrador"); showSystemAuthNotice("Administrador", "Você saiu da área administrativa.", "info"); });
   const form = document.getElementById("adminUserForm");
   if (!form) return;
@@ -5389,18 +5386,18 @@ function initInternalNotesAdminActions() {
 async function hydrateInitialData() {
   try {
     const [candidates, jobs, feedbacks, systemUsers, serviceRequests, interviews, internalNotes, companies, catalogItems, billingSettings, paymentSessions, privacyRequests] = await Promise.all([
-      fetchCollection("candidates", []),
-      fetchCollection("jobs", defaultJobs),
-      fetchCollection("feedbacks", []),
-      fetchCollection("systemUsers", []),
-      fetchCollection("serviceRequests", []),
-      fetchCollection("interviews", []),
-      fetchCollection("internalNotes", []),
-      fetchCollection("companies", []),
-      fetchCollection("catalogItems", defaultCatalogItems),
-      fetchCollection("billingSettings", defaultBillingSettings),
-      fetchCollection("paymentSessions", [])
-      , fetchCollection("privacyRequests", [])
+      safeFetchCollection("candidates", []),
+      safeFetchCollection("jobs", defaultJobs),
+      safeFetchCollection("feedbacks", []),
+      safeFetchCollection("systemUsers", []),
+      safeFetchCollection("serviceRequests", []),
+      safeFetchCollection("interviews", []),
+      safeFetchCollection("internalNotes", []),
+      safeFetchCollection("companies", []),
+      safeFetchCollection("catalogItems", defaultCatalogItems),
+      safeFetchCollection("billingSettings", defaultBillingSettings),
+      safeFetchCollection("paymentSessions", []),
+      safeFetchCollection("privacyRequests", [])
     ]);
     renderCandidateViews(candidates);
     renderJobs(jobs.length ? jobs : defaultJobs);
@@ -5433,6 +5430,7 @@ async function hydrateInitialData() {
 }
 
 async function init() {
+  initClickGuard();
   initMenu();
   initTabs();
   clearLegacySensitiveLocalData();
@@ -5458,10 +5456,20 @@ async function init() {
     onAuthStateChanged(state.auth, async (user) => {
       const systemSession = localStore.get(KEYS.systemSession, null);
       const expectedRole = isAdminPage() ? "Administrador" : "Consultora";
+      const sameIdentity = Boolean(user && systemSession && (
+        (systemSession.uid && user.uid === systemSession.uid)
+        || (systemSession.email && `${user.email || ""}`.toLowerCase() === `${systemSession.email}`.toLowerCase())
+      ));
       const validSession = user
+        && sameIdentity
         && systemSession?.perfil === expectedRole
         && (expectedRole !== "Administrador" || isMasterAdminRecord(systemSession));
-      if (!validSession) return;
+      if (!validSession) {
+        state.currentSystemUser = null;
+        localStore.remove(KEYS.systemSession);
+        syncSystemUiState(expectedRole);
+        return;
+      }
       state.currentSystemUser = {
         ...systemSession,
         uid: user.uid,

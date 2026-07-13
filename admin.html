@@ -29,19 +29,6 @@
             <p class="auth-shell-copy">A área administrativa é reservada à gestão da Conduzir, com acesso exclusivo para acompanhar cadastros, planos, serviços e relatórios.</p>
           </div>
         </div>
-        <div id="adminBootstrapArea" class="card nested-card is-hidden">
-          <div class="panel-head compact-head"><div><span class="section-tag">Primeiro acesso</span><h2>Criar administrador mestre único</h2><p>Este será o único usuário autorizado a acessar a aba admin.</p></div></div>
-          <div class="mini-card" style="margin-bottom:16px;">
-            <p><strong>Login fixo:</strong> admin.master</p>
-            <p><strong>E-mail fixo:</strong> admin@conduzirtalentos.com</p>
-            <p><strong>Regra:</strong> somente esse administrador entra na área administrativa. Depois de criado, o painel servirá para gerenciar consultoras, candidatos e empresas.</p>
-          </div>
-          <form id="adminBootstrapForm" class="form-grid">
-            <label><span>Senha do administrador mestre</span><input type="password" name="senha" required placeholder="Defina a senha do administrador" /></label>
-            <label><span>Contato</span><input name="contato" placeholder="Telefone ou e-mail" /></label>
-            <div class="full form-actions"><button class="btn btn-primary" type="submit">Criar administrador mestre</button></div>
-          </form>
-        </div>
         <form class="form-grid auth-single-form" id="systemLoginForm-admin">
           <label><span>Login ou e-mail</span><input name="login" required placeholder="admin.master ou admin@conduzirtalentos.com" /></label>
           <label><span>Senha</span><input type="password" name="senha" required placeholder="Sua senha" /></label>
@@ -109,7 +96,7 @@
         </div>
 
         <div class="panel card" id="tab-perfis">
-          <div class="panel-head"><div><span class="section-tag">Gestão de acessos</span><h2>Controle de usuários e contas</h2><p>Crie acessos somente para consultoras e gerencie no mesmo painel os cadastros de consultoras, empresas e candidatos. O admin pode pesquisar por nome ou e-mail, editar dados, bloquear, excluir logicamente criar acessos de consultoras com usuário e senha, sem exigir e-mail no cadastro.</p></div></div>
+          <div class="panel-head"><div><span class="section-tag">Gestão de acessos</span><h2>Controle de usuários e contas</h2><p>Crie acessos somente para consultoras e gerencie no mesmo painel os cadastros de consultoras, empresas e candidatos. O admin pode pesquisar por nome ou e-mail, editar dados, bloquear, excluir logicamente e criar acessos de consultoras com usuário e senha, sem exigir e-mail no cadastro.</p></div></div>
           <div id="adminUserNoticeHost"></div>
           <div class="card nested-card">
             <div class="panel-head compact-head">
@@ -348,6 +335,6 @@
     </div>
   </main>
   <script src="firebase-config.js"></script>
-  <script type="module" src="app.js?v=20260712-lgpd"></script>
+  <script type="module" src="app.js?v=20260713-qa3"></script>
 </body>
 </html>
