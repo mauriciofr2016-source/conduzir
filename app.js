@@ -74,7 +74,7 @@ const COLLECTIONS = {
 };
 
 const MASTER_ADMIN = {
-  login: "admin.master",
+  login: "erika",
   email: "admin@conduzirtalentos.com",
   nome: "Erika",
   perfil: "Administrador"
